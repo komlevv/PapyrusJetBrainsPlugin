@@ -1,0 +1,153 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<templateSet group="Papyrus">
+  <template name="script" value="Scriptname $NAME$ extends $BASE$&#10;{$DOC$}&#10;&#10;$END$"
+            key="live.template.papyrus.script.description" resource-bundle="messages.PapyrusBundle" toReformat="false" toShortenFQNames="false">
+    <variable name="NAME" expression="fileNameWithoutExtension()" defaultValue="&quot;ScriptName&quot;" alwaysStopAt="true"/>
+    <variable name="BASE" expression="" defaultValue="&quot;ScriptObject&quot;" alwaysStopAt="true"/>
+    <variable name="DOC" expression="" defaultValue="&quot;The documentation string.&quot;" alwaysStopAt="true"/>
+    <context><option name="PAPYRUS" value="true"/><option name="OTHER" value="false"/></context>
+  </template>
+
+  <template name="import" value="import $SCRIPT$&#10;$END$"
+            key="live.template.papyrus.import.description" resource-bundle="messages.PapyrusBundle" toReformat="false" toShortenFQNames="false">
+    <variable name="SCRIPT" expression="" defaultValue="&quot;scriptname&quot;" alwaysStopAt="true"/>
+    <context><option name="PAPYRUS" value="true"/><option name="OTHER" value="false"/></context>
+  </template>
+
+  <template name="comment" value="; $FINAL$$END$"
+            key="live.template.papyrus.comment.description" resource-bundle="messages.PapyrusBundle" toReformat="false" toShortenFQNames="false">
+    <variable name="FINAL" expression="" defaultValue="&quot;comment&quot;" alwaysStopAt="true"/>
+    <context><option name="PAPYRUS" value="true"/><option name="OTHER" value="false"/></context>
+  </template>
+
+  <template name="comment inline" value=";/ $FINAL$$END$ /;"
+            key="live.template.papyrus.comment.inline.description" resource-bundle="messages.PapyrusBundle" toReformat="false" toShortenFQNames="false">
+    <variable name="FINAL" expression="" defaultValue="&quot;comment&quot;" alwaysStopAt="true"/>
+    <context><option name="PAPYRUS" value="true"/><option name="OTHER" value="false"/></context>
+  </template>
+
+  <template name="comment block" value=";/&#10;&#9;$FINAL$$END$&#10;/;"
+            key="live.template.papyrus.comment.block.description" resource-bundle="messages.PapyrusBundle" toReformat="false" toShortenFQNames="false">
+    <variable name="FINAL" expression="" defaultValue="&quot;comment&quot;" alwaysStopAt="true"/>
+    <context><option name="PAPYRUS" value="true"/><option name="OTHER" value="false"/></context>
+  </template>
+
+  <template name="comment region" value="; $NAME$&#10;;---------------------------------------------&#10;&#10;$END$"
+            key="live.template.papyrus.comment.region.description" resource-bundle="messages.PapyrusBundle" toReformat="false" toShortenFQNames="false">
+    <variable name="NAME" expression="" defaultValue="&quot;Region&quot;" alwaysStopAt="true"/>
+    <context><option name="PAPYRUS" value="true"/><option name="OTHER" value="false"/></context>
+  </template>
+
+  <template name="property auto" value="$TYPE$ Property $NAME$$END$ Auto"
+            key="live.template.papyrus.property.auto.description" resource-bundle="messages.PapyrusBundle" toReformat="false" toShortenFQNames="false">
+    <variable name="TYPE" expression="" defaultValue="&quot;type&quot;" alwaysStopAt="true"/>
+    <variable name="NAME" expression="" defaultValue="&quot;propertyname&quot;" alwaysStopAt="true"/>
+    <context><option name="PAPYRUS" value="true"/><option name="OTHER" value="false"/></context>
+  </template>
+
+  <template name="property auto readonly" value="$TYPE$ Property $NAME$$END$ AutoReadOnly$HIDDEN$"
+            key="live.template.papyrus.property.auto.readonly.description" resource-bundle="messages.PapyrusBundle" toReformat="false" toShortenFQNames="false">
+    <variable name="TYPE" expression="" defaultValue="&quot;type&quot;" alwaysStopAt="true"/>
+    <variable name="NAME" expression="" defaultValue="&quot;propertyname&quot;" alwaysStopAt="true"/>
+    <variable name="HIDDEN" expression="" defaultValue="&quot; Hidden&quot;" alwaysStopAt="true"/>
+    <context><option name="PAPYRUS" value="true"/><option name="OTHER" value="false"/></context>
+  </template>
+
+  <template name="property full" value="$TYPE$ $NAME$Field$END$&#10;$TYPE$ Property $NAME$$HIDDEN$&#10;&#9;$TYPE$ Function Get()&#10;&#9;&#9;return $NAME$Field&#10;&#9;EndFunction&#10;&#9;Function Set($TYPE$ value)&#10;&#9;&#9;$NAME$Field = value&#10;&#9;EndFunction&#10;EndProperty"
+            key="live.template.papyrus.property.full.description" resource-bundle="messages.PapyrusBundle" toReformat="false" toShortenFQNames="false">
+    <variable name="TYPE" expression="" defaultValue="&quot;type&quot;" alwaysStopAt="true"/>
+    <variable name="NAME" expression="" defaultValue="&quot;propertyname&quot;" alwaysStopAt="true"/>
+    <variable name="HIDDEN" expression="" defaultValue="&quot; Hidden&quot;" alwaysStopAt="true"/>
+    <context><option name="PAPYRUS" value="true"/><option name="OTHER" value="false"/></context>
+  </template>
+
+  <template name="if" value="If ($CONDITION$)&#10;&#9;$FINAL$$END$&#10;EndIf"
+            key="live.template.papyrus.if.description" resource-bundle="messages.PapyrusBundle" toReformat="false" toShortenFQNames="false">
+    <variable name="CONDITION" expression="" defaultValue="&quot;true&quot;" alwaysStopAt="true"/>
+    <variable name="FINAL" expression="" defaultValue="&quot;; code&quot;" alwaysStopAt="true"/>
+    <context><option name="PAPYRUS" value="true"/><option name="OTHER" value="false"/></context>
+  </template>
+
+  <template name="elseif" value="ElseIf ($CONDITION$)&#10;&#9;$FINAL$$END$"
+            key="live.template.papyrus.elseif.description" resource-bundle="messages.PapyrusBundle" toReformat="false" toShortenFQNames="false">
+    <variable name="CONDITION" expression="" defaultValue="&quot;true&quot;" alwaysStopAt="true"/>
+    <variable name="FINAL" expression="" defaultValue="&quot;; code&quot;" alwaysStopAt="true"/>
+    <context><option name="PAPYRUS" value="true"/><option name="OTHER" value="false"/></context>
+  </template>
+
+  <template name="else" value="Else&#10;&#9;$FINAL$$END$"
+            key="live.template.papyrus.else.description" resource-bundle="messages.PapyrusBundle" toReformat="false" toShortenFQNames="false">
+    <variable name="FINAL" expression="" defaultValue="&quot;; code&quot;" alwaysStopAt="true"/>
+    <context><option name="PAPYRUS" value="true"/><option name="OTHER" value="false"/></context>
+  </template>
+
+  <template name="while" value="While ($CONDITION$)&#10;&#9;$FINAL$$END$&#10;EndWhile"
+            key="live.template.papyrus.while.description" resource-bundle="messages.PapyrusBundle" toReformat="false" toShortenFQNames="false">
+    <variable name="CONDITION" expression="" defaultValue="&quot;true&quot;" alwaysStopAt="true"/>
+    <variable name="FINAL" expression="" defaultValue="&quot;; code&quot;" alwaysStopAt="true"/>
+    <context><option name="PAPYRUS" value="true"/><option name="OTHER" value="false"/></context>
+  </template>
+
+  <template name="while for" value="int $INDEX$ = 0&#10;While ($INDEX$ &lt; $SIZE$)&#10;&#9;$BODY$&#9;$END$&#10;&#9;$INDEX$ += 1&#10;EndWhile"
+            key="live.template.papyrus.while.for.description" resource-bundle="messages.PapyrusBundle" toReformat="false" toShortenFQNames="false">
+    <variable name="INDEX" expression="" defaultValue="&quot;index&quot;" alwaysStopAt="true"/>
+    <variable name="SIZE" expression="" defaultValue="&quot;size&quot;" alwaysStopAt="true"/>
+    <variable name="BODY" expression="" defaultValue="&quot;; code&quot;" alwaysStopAt="true"/>
+    <context><option name="PAPYRUS" value="true"/><option name="OTHER" value="false"/></context>
+  </template>
+
+  <template name="while for each" value="int $INDEX$ = 0&#10;While ($INDEX$ &lt; $ARRAY$.Length)&#10;&#9;$TYPE$ item = $ARRAY$[$INDEX$]&#10;&#9;$BODY$$END$&#10;&#9;$INDEX$ += 1&#10;EndWhile"
+            key="live.template.papyrus.while.for.each.description" resource-bundle="messages.PapyrusBundle" toReformat="false" toShortenFQNames="false">
+    <variable name="INDEX" expression="" defaultValue="&quot;index&quot;" alwaysStopAt="true"/>
+    <variable name="ARRAY" expression="" defaultValue="&quot;array&quot;" alwaysStopAt="true"/>
+    <variable name="TYPE" expression="" defaultValue="&quot;type&quot;" alwaysStopAt="true"/>
+    <variable name="BODY" expression="" defaultValue="&quot;; code&quot;" alwaysStopAt="true"/>
+    <context><option name="PAPYRUS" value="true"/><option name="OTHER" value="false"/></context>
+  </template>
+
+  <template name="function" value="Function $NAME$()&#10;&#9;$FINAL$$END$&#10;EndFunction"
+            key="live.template.papyrus.function.description" resource-bundle="messages.PapyrusBundle" toReformat="false" toShortenFQNames="false">
+    <variable name="NAME" expression="" defaultValue="&quot;Foo&quot;" alwaysStopAt="true"/>
+    <variable name="FINAL" expression="" defaultValue="&quot;; code&quot;" alwaysStopAt="true"/>
+    <context><option name="PAPYRUS" value="true"/><option name="OTHER" value="false"/></context>
+  </template>
+
+  <template name="function full" value="$TYPE$ Function $NAME$($ARGTYPE$ $ARG$)&#10;&#9;$FINAL$$END$&#10;&#9;return $RETURN$&#10;EndFunction"
+            key="live.template.papyrus.function.full.description" resource-bundle="messages.PapyrusBundle" toReformat="false" toShortenFQNames="false">
+    <variable name="TYPE" expression="" defaultValue="&quot;var&quot;" alwaysStopAt="true"/>
+    <variable name="NAME" expression="" defaultValue="&quot;Foobar&quot;" alwaysStopAt="true"/>
+    <variable name="ARGTYPE" expression="" defaultValue="&quot;var&quot;" alwaysStopAt="true"/>
+    <variable name="ARG" expression="" defaultValue="&quot;argument&quot;" alwaysStopAt="true"/>
+    <variable name="RETURN" expression="" defaultValue="&quot;none&quot;" alwaysStopAt="true"/>
+    <variable name="FINAL" expression="" defaultValue="&quot;; code&quot;" alwaysStopAt="true"/>
+    <context><option name="PAPYRUS" value="true"/><option name="OTHER" value="false"/></context>
+  </template>
+
+  <template name="function getter" value="$TYPE$ Function $NAME$()&#10;&#9;$TYPE$ $VALUE$ = $INITIAL$&#10;&#9;$FINAL$$END$&#10;&#9;return $VALUE$&#10;EndFunction"
+            key="live.template.papyrus.function.getter.description" resource-bundle="messages.PapyrusBundle" toReformat="false" toShortenFQNames="false">
+    <variable name="TYPE" expression="" defaultValue="&quot;var&quot;" alwaysStopAt="true"/>
+    <variable name="NAME" expression="" defaultValue="&quot;GetFoo&quot;" alwaysStopAt="true"/>
+    <variable name="VALUE" expression="" defaultValue="&quot;value&quot;" alwaysStopAt="true"/>
+    <variable name="INITIAL" expression="" defaultValue="&quot;\&quot;type\&quot;&quot;" alwaysStopAt="true"/>
+    <variable name="FINAL" expression="" defaultValue="&quot;; code&quot;" alwaysStopAt="true"/>
+    <context><option name="PAPYRUS" value="true"/><option name="OTHER" value="false"/></context>
+  </template>
+
+  <template name="function setter" value="Function $NAME$($TYPE$ $ARG$)&#10;&#9;$FINAL$$END$&#10;EndFunction"
+            key="live.template.papyrus.function.setter.description" resource-bundle="messages.PapyrusBundle" toReformat="false" toShortenFQNames="false">
+    <variable name="NAME" expression="" defaultValue="&quot;SetFoo&quot;" alwaysStopAt="true"/>
+    <variable name="TYPE" expression="" defaultValue="&quot;var&quot;" alwaysStopAt="true"/>
+    <variable name="ARG" expression="" defaultValue="&quot;argument&quot;" alwaysStopAt="true"/>
+    <variable name="FINAL" expression="" defaultValue="&quot;; code&quot;" alwaysStopAt="true"/>
+    <context><option name="PAPYRUS" value="true"/><option name="OTHER" value="false"/></context>
+  </template>
+
+  <template name="state (Skyrim)" value="$AUTO$State $NAME$$END$&#10;&#9;&#9;; Note: Parameterless state events are only supported in Skyrim.&#10;&#9;Event OnBeginState()&#10;&#9;&#9;$BEGIN_CODE$&#10;&#9;EndEvent&#10;&#9;Event OnEndState()&#10;&#9;&#9;$END_CODE$&#10;&#9;EndEvent&#10;EndState"
+            key="live.template.papyrus.state.skyrim.description" resource-bundle="messages.PapyrusBundle" toReformat="false" toShortenFQNames="false">
+    <variable name="AUTO" expression="" defaultValue="&quot;Auto &quot;" alwaysStopAt="true"/>
+    <variable name="NAME" expression="" defaultValue="&quot;statename&quot;" alwaysStopAt="true"/>
+    <variable name="BEGIN_CODE" expression="" defaultValue="&quot;; code&quot;" alwaysStopAt="true"/>
+    <variable name="END_CODE" expression="" defaultValue="&quot;; code&quot;" alwaysStopAt="true"/>
+    <context><option name="PAPYRUS" value="true"/><option name="OTHER" value="false"/></context>
+  </template>
+</templateSet>

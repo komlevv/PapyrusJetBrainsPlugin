@@ -1,0 +1,7 @@
+Papyrus-specific icons in this directory are copied from:
+joelday/papyrus-lang v3.3.0-prerelease.1
+extension/resources/
+
+The original upstream license is preserved both in the source vendor metadata and inside the embedded unchanged VSIX as extension/LICENSE.txt.
+
+Only icons used for Papyrus-specific concepts without a suitable stock IntelliJ icon are copied here.

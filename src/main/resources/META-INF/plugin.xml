@@ -1,0 +1,127 @@
+<idea-plugin>
+    <id>dev.papyrus.intellij-papyrus</id>
+    <name>Papyrus Language</name>
+    <version>0.2.146</version>
+
+    <vendor>Local</vendor>
+    <resource-bundle>messages.PapyrusBundle</resource-bundle>
+
+    <description><![CDATA[
+        Papyrus language support for CLion and compatible JetBrains IDEs using IntelliJ Platform LSP, TextMate, and editor APIs.
+    ]]></description>
+
+    <depends>com.intellij.modules.platform</depends>
+    <depends>com.intellij.modules.lang</depends>
+    <depends>com.intellij.modules.lsp</depends>
+    <depends>com.intellij.modules.ultimate</depends>
+    <depends>org.jetbrains.plugins.textmate</depends>
+
+    <extensions defaultExtensionNs="com.intellij">
+        <configurationType implementation="dev.papyrus.jetbrains.run.PapyrusProjectConfigurationType"/>
+        <configurationType implementation="dev.papyrus.jetbrains.run.PapyrusAttachConfigurationType"/>
+
+        <directoryProjectGenerator
+                implementation="dev.papyrus.jetbrains.actions.PapyrusDirectoryProjectGenerator"/>
+
+        <projectTaskRunner
+                id="papyrus"
+                implementation="dev.papyrus.jetbrains.run.PapyrusProjectTaskRunner"
+                order="first"/>
+
+        <projectConfigurable
+                groupId="build.tools"
+                id="dev.papyrus.intellij.build.settings"
+                key="settings.papyrus.display.name"
+                bundle="messages.PapyrusBundle"
+                instance="dev.papyrus.jetbrains.config.PapyrusBuildSettingsConfigurable"
+                nonDefaultProject="true"/>
+
+        <applicationConfigurable
+                groupId="language"
+                id="dev.papyrus.intellij.settings"
+                key="settings.papyrus.display.name"
+                bundle="messages.PapyrusBundle"
+                instance="dev.papyrus.jetbrains.config.PapyrusSettingsConfigurable"/>
+
+        <platform.lsp.integrationProvider
+                implementation="dev.papyrus.jetbrains.lsp.PapyrusLspIntegrationProvider"/>
+
+        <renameHandler
+                implementation="dev.papyrus.jetbrains.lsp.PapyrusRenameHandler"
+                order="first"/>
+
+        <textmate.bundleProvider
+                implementation="dev.papyrus.jetbrains.textmate.PapyrusTextMateBundleProvider"/>
+
+        <lang.foldingBuilder
+                language="textmate"
+                implementationClass="dev.papyrus.jetbrains.editor.PapyrusFoldingBuilder"/>
+
+        <implementationViewSessionFactory
+                implementation="dev.papyrus.jetbrains.editor.PapyrusQuickDefinitionSessionFactory"/>
+
+        <enterHandlerDelegate
+                implementation="dev.papyrus.jetbrains.editor.PapyrusEnterIndentHandler"/>
+
+        <defaultLiveTemplates file="liveTemplates/Papyrus.xml"/>
+        <liveTemplateContext
+                contextId="PAPYRUS"
+                implementation="dev.papyrus.jetbrains.editor.PapyrusLiveTemplateContextType"/>
+
+        <editorNotificationProvider
+                implementation="dev.papyrus.jetbrains.status.PapyrusScriptStatusEditorNotificationProvider"/>
+
+        <statusBarWidgetFactory
+                id="PapyrusStatus"
+                implementation="dev.papyrus.jetbrains.status.PapyrusStatusBarWidgetFactory"/>
+
+        <toolWindow
+                id="Papyrus Projects"
+                anchor="right"
+                icon="/icons/papyrus/ScriptManager_16x.svg"
+                factoryClass="dev.papyrus.jetbrains.projects.PapyrusProjectsToolWindowFactory"/>
+    </extensions>
+
+    <actions>
+        <action id="Papyrus.SearchCreationKitWiki"
+                class="dev.papyrus.jetbrains.actions.SearchCreationKitWikiAction">
+            <add-to-group group-id="ToolsMenu" anchor="last"/>
+            <add-to-group group-id="EditorPopupMenu" anchor="last"/>
+        </action>
+
+        <action id="Papyrus.ViewAssembly"
+                class="dev.papyrus.jetbrains.actions.ViewAssemblyAction"
+                icon="/icons/papyrus/ScriptPreview_16x.svg">
+            <add-to-group group-id="ToolsMenu" anchor="last"/>
+            <add-to-group group-id="EditorPopupMenu" anchor="last"/>
+            <add-to-group group-id="ProjectViewPopupMenu" anchor="last"/>
+        </action>
+
+        <action id="Papyrus.GenerateSkyrimProject"
+                class="dev.papyrus.jetbrains.actions.GenerateSkyrimProjectAction"
+                icon="/icons/papyrus/NewScript_16x.svg">
+            <add-to-group group-id="ToolsMenu" anchor="last"/>
+        </action>
+
+        <action id="Papyrus.CompileProject"
+                class="dev.papyrus.jetbrains.actions.CompilePapyrusProjectAction"
+                icon="/icons/papyrus/Compile_16x.svg">
+            <add-to-group group-id="ToolsMenu" anchor="last"/>
+            <add-to-group group-id="EditorPopupMenu" anchor="last"/>
+            <add-to-group group-id="ProjectViewPopupMenu" anchor="last"/>
+        </action>
+
+        <action id="Papyrus.ShowWelcome"
+                class="dev.papyrus.jetbrains.actions.ShowPapyrusWelcomeAction">
+            <add-to-group group-id="ToolsMenu" anchor="last"/>
+        </action>
+
+        <!--
+            Safety hold: unrestricted Pyro task-definition options, debug-support installation, and executable Skyrim debugger attach
+            actions/runners remain disabled. Compile Project may discover/select only real project-local PPJ tasks; it, the PapyrusProject Run Configuration, and the explicitly
+            selected Papyrus ProjectTaskRunner expose only the same validated project-local Pyro subset. PapyrusAttach is metadata-only and rejects execution until that
+            safety gate is completed. Code Actions remain disabled. Refactor | Rename is enabled only through the
+            project-bound Papyrus safety handler.
+        -->
+    </actions>
+</idea-plugin>
