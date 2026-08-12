@@ -2,11 +2,9 @@
 > **Target IDE:** CLion **2026.2.x** on IntelliJ Platform **262**. Verified target: **CLion 2026.2.1 / CL-262.9437.136**.
 > **Platform:** Windows.
 
-# Papyrus Language for JetBrains IDEs
+# Papyrus Language Support for JetBrains CLion 
 
-Papyrus language support for **Skyrim Special Edition / Anniversary Edition** in CLion.
-
-The plugin uses the upstream `joelday/papyrus-lang v3.3.0-prerelease.1` language server and TextMate grammars and bundles the required upstream runtime. Users do **not** need to install the VS Code extension or configure a separate VSIX path.
+This is a CLion port of `joelday/papyrus-lang`. Plugin uses `v3.3.0-prerelease.1` language server and TextMate grammars and bundles the required upstream runtime. The plugin status is alpha, don't expect anything. Test and report issues: https://github.com/komlevv/PapyrusJetBrainsPlugin/issues
 
 ## Supported scope
 
@@ -14,7 +12,7 @@ The plugin uses the upstream `joelday/papyrus-lang v3.3.0-prerelease.1` language
 - **Fallout 4** and **Skyrim Legendary Edition** are not currently supported.
 - Papyrus debugging is not currently available.
 - Generic LSP Code Actions are disabled.
-- Advanced/unrestricted Pyro packaging, events, variables, remotes, and similar task features are intentionally disabled.
+- Advanced/unrestricted Pyro packaging, events, variables, remotes, and similar task features are intentionally disabled for now.
 
 ## Features
 
