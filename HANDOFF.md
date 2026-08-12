@@ -1,5 +1,7 @@
 # Papyrus JetBrains Plugin handoff — 0.2.146 green baseline
 
+> Documentation boundary: `README.md` is the public/user-facing GitHub landing page. Version-by-version history, regression notes, test gates, inspection/lint details, local build paths, offline dependency layout, implementation notes, and other maintainer-only operational context belong here or in the dedicated living technical documents, not in `README.md`.
+
 0.2.146 is the current user-verified green baseline. Full Windows gate: **59/59 UNIT + 16/16 PAPYRUS-LANG + 39/39 REAL CLION UI = 114/114**.
 
 0.2.145 performed the high-confidence code-quality cleanup; 0.2.146 only fixes the checked `URISyntaxException` compile regression in the server-integration guardian classpath conversion. Production behavior, write boundaries, process containment, and debugger hold are unchanged.

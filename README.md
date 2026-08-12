@@ -1,257 +1,101 @@
-> **Status: ALPHA** — active development; APIs, behavior, and packaging may still change before the first stable release.
+> **Status: ALPHA** — active development; behavior and packaging may still change before the first stable release.
 > **Target IDE:** CLion **2026.2.x** on IntelliJ Platform **262**. Verified target: **CLion 2026.2.1 / CL-262.9437.136**.
+> **Platform:** Windows.
 
 # Papyrus Language for JetBrains IDEs
 
-Current source baseline: **0.2.146**. The latest user-reported Windows gate is fully green: **59/59 UNIT + 16/16 PAPYRUS-LANG + 39/39 REAL CLION UI = 114/114** on the verified CLion target above.
+Papyrus language support for **Skyrim Special Edition / Anniversary Edition** in CLion.
 
-0.2.145 was a behavior-preserving code-quality cleanup based on an offline javac-AST review of plugin-owned Java; 0.2.146 corrected the single checked-exception compile regression exposed by the first Windows build after that cleanup. Production feature scope and safety boundaries are unchanged.
+The plugin uses the upstream `joelday/papyrus-lang v3.3.0-prerelease.1` language server and TextMate grammars and bundles the required upstream runtime. Users do **not** need to install the VS Code extension or configure a separate VSIX path.
 
-The active game scope is **Skyrim Special Edition / Anniversary Edition**. Fallout 4 and Skyrim LE remain out of current scope. Debugger work is explicitly deferred.
+## Supported scope
 
-All 24 submitted IDE inspection screenshots and the later code-quality pass are tracked in `INSPECTION_AUDIT.md`. Vendored upstream content and generated Starter/CLion output are not modified merely to satisfy local inspections.
+- **Skyrim Special Edition / Anniversary Edition** is the active game target.
+- **Fallout 4** and **Skyrim Legendary Edition** are not currently supported.
+- Papyrus debugging is not currently available.
+- Generic LSP Code Actions are disabled.
+- Advanced/unrestricted Pyro packaging, events, variables, remotes, and similar task features are intentionally disabled.
 
-## Scope
+## Features
 
-This plugin ports the Papyrus tooling needed for **Skyrim Special Edition / Anniversary Edition** from `joelday/papyrus-lang v3.3.0-prerelease.1` to CLion 2026.2 / IntelliJ Platform 262 using platform LSP, TextMate, editor, tool-window, status-bar, and action APIs.
+### Editing and navigation
 
-Current scope is intentionally narrower than the complete VS Code extension:
-
-- Skyrim SE/AE is the active game target.
-- Fallout 4 and Skyrim LE are not current targets.
-- Safe Skyrim SE/AE project compilation through bundled Pyro is enabled through the explicit Compile Project action, a native Papyrus Project Run Configuration, and an opt-in Build Project bridge. Ordinary projects keep the IDE build system unless the user explicitly selects Papyrus (Pyro); unrestricted Pyro tasks/package/zip/events/remotes and Papyrus debugging remain on safety hold.
-- Papyrus semantic Rename is enabled only through a project-bound safety handler; generic LSP Code Actions remain disabled.
-- Automatic first-install/update Welcome is intentionally skipped; manual Getting Started help remains available.
-
-See `PORT_STATUS.md` for the authoritative feature-parity matrix and `SAFETY_AUDIT.md` for write boundaries.
-
-## Current verified feature set
-
-### Language/editor
-
-The current **0.2.146** green Windows baseline has real-IDE coverage for:
-
-- `.psc` TextMate recognition and Papyrus syntax highlighting;
+- `.psc` syntax highlighting;
 - completion, including member completion after `.`;
 - diagnostics;
-- go to declaration / definition;
-- Find Usages through LSP references;
-- Quick Definition preview;
+- Go to Declaration / Definition;
+- Find Usages;
+- Quick Definition;
 - Quick Documentation / hover;
 - Parameter Info / signature help;
 - File Structure / document symbols;
-- Papyrus folding;
+- code folding;
 - line comments;
-- auto-closing/surrounding pairs;
+- smart typing pairs;
 - Papyrus indentation rules;
-- representative common Papyrus Live Templates using real editor input and physical Tab traversal.
+- common Papyrus Live Templates.
 
-0.2.112 verifies hardened **Refactor | Rename** end-to-end: the LSP server supplies semantic definition/reference information, while the plugin owns the write policy, exact-edit validation, explicit blocked/error UI, unsolicited `workspace/applyEdit` rejection, and one undoable IDE write command without blocking the UI thread.
+### Refactoring
 
-The exact tagged VSIX is now a **vendored build input**. Gradle verifies its pinned SHA-256, embeds the unchanged VSIX into the plugin JAR, and the plugin extracts it into a versioned IDE system-cache directory on first use. That extracted bundled copy is the TextMate/LSP/resource source of truth for `.psc`, `.ppj`, and `.disassemble.pas`. No user VSIX path is required in Settings.
+**Refactor → Rename** uses Papyrus semantic information while keeping writes restricted to project-owned source files.
 
-### Papyrus Projects and custom protocol
+Rename is rejected when a target is external, read-only, import-only, remote, part of the Creation Kit/game installation, part of the bundled runtime/cache, malformed, or otherwise outside the project write boundary. `ScriptName` rename is currently disabled.
 
-`Papyrus Projects` uses the upstream `papyrus/projectInfos` snapshot and provides:
+### Papyrus Projects
 
-- explicit `Sources` and `Imports` groups;
+The **Papyrus Projects** tool window provides:
+
+- Sources and Imports groups;
 - source/import provenance;
-- lazy include loading;
-- bounded grouping for very large source collections;
-- `[remote]` marking for remote imports;
-- exact navigation to LSP-reported script paths;
-- `Navigate...` search over the cached project snapshot without expanding the tree.
+- lazy loading for large projects;
+- remote-import marking;
+- navigation to scripts;
+- project script search through **Navigate...**;
+- overridden and unresolved script status;
+- project output with clickable Papyrus compiler diagnostics.
 
-The upstream custom protocol endpoints currently verified against the real tagged server are:
+The status bar follows the active Papyrus editor and exposes relevant language-service and project state.
 
-- `papyrus/projectInfos`;
-- `textDocument/scriptInfo`;
-- `textDocument/assembly`;
-- `textDocument/syntaxTree` at raw-server level.
+### Actions
 
-`syntaxTree` currently has no dedicated IDE user-facing view; it is retained as protocol coverage rather than advertised as a UI feature.
-
-### Actions and status UX
-
-Current SSE/AE client surfaces include:
+Available Papyrus actions include:
 
 - **Papyrus: Search Creation Kit Wiki**;
-- **Papyrus: View Assembly** — opens a read-only in-memory `.disassemble.pas` editor;
-- **File → New Project → Papyrus** — CLion-compatible platform directory-project generator that creates the bounded Skyrim SE/AE Papyrus project layout and opts that new project into `Papyrus (Pyro)` build;
-- **Papyrus: Generate Skyrim SE Project Files** — explicit bounded project generation into a separate new folder;
-- **Papyrus: Compile Project** — bounded bundled-Pyro compilation for a restricted SSE/AE `.ppj`; when invoked without a selected `.ppj`, it discovers real project-local `.ppj` files and offers upstream-style `Compile Project (<relative ppj>)` choices without exposing advanced Pyro options;
-- **Run Configuration: Papyrus Project** — VERIFIED in 0.2.116 using the IDE Run/Stop/Rerun actions and the standard Run console while reusing the same safe compile preflight, command construction, snapshot, output boundary, and per-project execution gate;
-- **Build Project / Ctrl+F9** — VERIFIED in 0.2.117, enabled only when the project-level Build Tools | Papyrus setting selects `Papyrus (Pyro)`; otherwise the runner returns `canRun=false` and native IDE behavior is untouched;
-- `Papyrus Projects` tree and script navigator;
-- unresolved and overridden-script status, including winning-file navigation for overridden scripts;
-- active-editor-aware Papyrus status bar;
-- missing-game and missing-compiler states;
-- status click to the plugin-owned bounded `Papyrus Projects` Output tab transcript, now backed by a native JetBrains console with project-bounded clickable Papyrus compiler diagnostics;
-- missing-state click to **Settings → Languages & Frameworks → Papyrus**;
-- explicit enable/disable of the language service without modifying external game/source inputs;
-- read-only Windows Registry fallback for the Skyrim SE/AE install path.
+- **Papyrus: View Assembly** — opens a read-only `.disassemble.pas` editor;
+- **Papyrus: Generate Skyrim SE Project Files**;
+- **Papyrus: Compile Project**;
+- **Papyrus: Show Getting Started Help**.
 
-**Papyrus: Show Getting Started Help** is implemented and registered, but does not currently have a dedicated real-IDE scenario. Automatic Welcome is intentionally not implemented.
+### Project creation, build, and run
 
-## Test status and coverage
+**File → New Project → Papyrus** creates a Skyrim SE/AE Papyrus project layout.
 
-### Current authoritative green gate
+Project compilation uses the bundled Pyro toolchain with a restricted safety profile:
 
-The user reported **0.2.146 green** on the target Windows/CLion environment:
+- the selected `.ppj` must belong to the project;
+- compiler output is forced into a project-local directory;
+- Skyrim / Creation Kit files are treated as read-only inputs;
+- package/zip/anonymize, build events, variables, and remote inputs are rejected.
 
-| Layer         | Tests   | Result   | What it proves |
-| ------------- | ------: | -------- | -------------- |
-| UNIT          | 59      | PASS     | deterministic contracts, safety boundaries, process containment, Safe Rename, bounded Pyro compile/task discovery, compiler-output parsing, native Run Configuration, and opt-in Build Project selection |
-| PAPYRUS-LANG  | 16      | PASS     | black-box behavior of the exact pinned upstream server/runtime, including semantic Completion/Definition/References, Rename, diagnostics, Project Infos, and source-resolution behavior |
-| REAL CLION UI | 39      | PASS     | real CLion 2026.2.1 behavior through Starter/Driver, including editor/LSP features, diagnostics refresh, Project Infos/status, Safe Rename, bounded compile/run/build integration, compiler navigation, first-run Toolchains handling, and Papyrus New Project |
-| **Total**     | **114** | **PASS** | aggregate feature-oriented verification |
+A native **Papyrus Project** Run Configuration is available through the normal Run/Stop/Rerun UI.
 
-The authoritative regression target is **59/16/39 = 114 tests**. 0.2.146 preserves the same feature coverage after the code-quality cleanup and its checked-exception compile correction.
+**Build Project / Ctrl+F9** uses Papyrus only when the project explicitly selects **Papyrus (Pyro)** under Build Tools. Existing projects otherwise keep the IDE's normal build behavior.
 
-The authoritative command is:
+## Installation
 
-```bat
-gradlew.bat test
-```
+Install the plugin ZIP through:
 
-The aggregate result is written to:
+**Settings → Plugins → ⚙ → Install Plugin from Disk**
 
-```text
-build/papyrus-test-report.txt
-```
+Select the Papyrus plugin ZIP and restart the IDE when prompted.
 
-### What “coverage” means in this project
-
-There is currently **no JaCoCo or equivalent line/branch coverage instrumentation**, so no source-line coverage percentage is claimed.
-
-Coverage is tracked per feature and per verification layer:
-
-- **U** — unit/contract coverage;
-- **S** — raw exact-upstream server coverage;
-- **I** — real target-IDE runtime coverage;
-- **INDIRECT** — exercised as part of another authoritative scenario but without a dedicated scenario;
-- **HOLD** — intentionally disabled and tested/registered only as disabled where applicable.
-
-The detailed matrix is maintained in `PORT_STATUS.md`.
-
-## Test architecture
-
-### Unit suite — 59 tests
-
-The unit layer covers the behavior that should not depend on spawning the IDE or a real language server, including:
-
-- project generation boundaries;
-- Creation Kit Wiki target selection/escaping;
-- tagged VSIX assembly grammar declaration;
-- exact upstream indentation rules;
-- common Live Template snapshot parity;
-- safe plugin descriptor surface;
-- project-tree presentation and large-source threshold;
-- script navigator ranking/provenance/result cap;
-- Creation Kit INI loading;
-- configured/Registry install-path resolution;
-- immutable host-runtime staging;
-- launch/readiness classification;
-- status-bar state and tooltip presentation;
-- bundled-VSIX extraction, checksum handling, and archive traversal rejection;
-- Papyrus Rename writable-project, import-only dependency, remote, Creation Kit, vendor-cache, content-root, file-type, and read-only policy;
-- Safe Rename identifier validation, exact replacement-shape validation, `ScriptName` detection, and unsolicited `workspace/applyEdit` rejection;
-- safe Pyro compile validation for project-local output, SSE-only scope, and rejection of packaging/events/remotes/variables;
-- project-local `.ppj` task discovery ordering/temp-snapshot/symlink boundaries and exact Papyrus compiler problem-line parsing, including captured stderr prefixes.
-
-### Raw papyrus-lang suite — 16 tests
-
-This layer starts the exact tagged upstream host and verifies:
-
-1. initialization and dynamic References registration;
-2. completion;
-3. hover;
-4. signature help;
-5. diagnostics;
-6. definition;
-7. references;
-8. document symbols;
-9. semantic `textDocument/rename` workspace edits across project scripts;
-10. `textDocument/syntaxTree` buffer synchronization;
-11. `projectInfos` + `scriptInfo` + `assembly` custom protocol behavior;
-12. semantic Completion scope/declaration matrix;
-13. Definition inherited/case-insensitive/unresolved edges;
-14. References same-name type isolation, declaration-origin, case-insensitive usage, and unresolved behavior;
-15. `projectInfos`/`scriptInfo` local source-vs-import provenance and duplicate-identifier precedence;
-16. pre-populated remote-import cache metadata plus semantic definition resolution into the cached remote source, without network download.
-
-### Real CLion UI suite — 39 ordered scenarios
-
-The current suite verifies, in order:
-
-1. `.psc` TextMate recognition;
-2. completion;
-3. diagnostics;
-4. go to declaration;
-5. folding;
-6. Find Usages;
-7. Quick Definition;
-8. Quick Documentation;
-9. Parameter Info;
-10. File Structure;
-11. representative TextMate scopes;
-12. comment actions;
-13. smart typing pairs;
-14. indentation;
-15. `if` Live Template;
-16. `function` Live Template;
-17. `propertyFull` linked-variable Live Template;
-18. Projects tree navigation and lazy/bounded source presentation;
-19. overridden-script status/navigation;
-20. View Assembly read-only in-memory editor and assembly grammar;
-21. Creation Kit Wiki action behavior without launching a real browser in the test;
-22. safe Generate Project boundaries and cancel behavior;
-23. active-editor-aware status and richer tooltip;
-24. compiler-missing status;
-25. status click → Output without LSP restart;
-26. missing status → Settings, explicit disable, and no restart while disabled;
-27. cached `projectInfos` script navigator → exact LSP-reported file;
-28. Rename of an external/Creation Kit symbol is blocked with an explicit user-visible error and no source changes;
-29. Rename of a project-owned Papyrus symbol uses LSP semantics and changes its project references;
-30. safe `.ppj` compile invokes bundled Pyro and produces a non-empty `.pex` only under project-local output while project and Creation Kit source files remain unchanged.
-31. native `Papyrus Project` Run Configuration executes the same safe-Pyro pipeline through the IDE Run infrastructure, produces project-local `.pex` output, releases the shared execution gate, removes the validated snapshot, and leaves project/Creation Kit source unchanged.
-32. standard `Build Project` invokes the Papyrus task runner only after explicit project-level `Papyrus (Pyro)` selection, then produces project-local `.pex` through the same safe pipeline while leaving sources unchanged.
-33. `File | New Project` resolves CLion's live New Project action without hard-coding a product-specific ID and verifies that the real heavyweight New Project popup exposes `Papyrus` through the registered directory-project generator.
-34. live `textDocument/syntaxTree` follows unsaved replacement and deletion through the real CLion `Document` → compatibility `didChange` bridge, then returns to the restored buffer.
-35. live editor diagnostics move after an unsaved insertion, clear after an unsaved fix, reappear after an unsaved deletion, and restore to the original invalid fixture.
-36. unresolved script status appears through the native editor notification and active-editor status-bar tooltip without an overriding-file action.
-37. a real VFS `.psc` create/delete inside the project propagates through `workspace/didChangeWatchedFiles` → upstream `papyrus/projectsUpdated` → refreshed cached `projectInfos`.
-38. invoking **Papyrus: Compile Project** without a selected PPJ discovers multiple real project-local PPJs and executes the explicitly selected upstream-style compile task through the same bounded Pyro service.
-39. a real broken Papyrus source produces a compiler problem line, the project-bounded matcher resolves it, and navigation opens the exact project source location while no successful `.pex` is produced.
-
-The suite is deliberately integration-heavy: a green run is the authoritative user-visible gate, not a substitute mock implementation.
-
-## Safety model
-
-External Papyrus inputs are treated as read-only by passive language tooling. In particular, the plugin must not silently modify:
-
-- the embedded/read-only upstream VSIX payload and its extracted IDE-cache copy;
-- Skyrim / Creation Kit installation files;
-- import-only Papyrus dependency sources;
-- MO2/mod-manager directories;
-- compiler inputs.
-
-Allowed writes are explicit and bounded:
-
-- normal user editor changes to project-owned files;
-- Papyrus Rename text edits only when **every** target is an existing writable `.psc` inside IDE project content and the canonical project root, and every edit is an exact replacement of the selected identifier with the requested new identifier; any unsafe/malformed target rejects the whole operation before edits are applied;
-- explicit **Compile Project** output only under a validated project-local directory; the selected `.ppj` must be inside the project and may not enable package/zip/anonymize, build events, variables, or remote imports/folders;
-- unsolicited server `workspace/applyEdit` requests are rejected by a client-side notifications guard rather than merely discouraged through capabilities;
-- IDE settings/state;
-- the IDE system/cache runtime staging directory;
-- an explicitly requested **new** generated project child directory;
-- build/test-owned directories and isolated test fixtures.
-
-See `SAFETY_AUDIT.md` for the exact current boundaries.
+No separate `papyrus-lang` or VSIX installation is required.
 
 ## Configuration
 
-Open **Settings → Languages & Frameworks → Papyrus** and configure:
+Open **Settings → Languages & Frameworks → Papyrus**.
+
+Available settings include:
 
 - language-service enabled state;
 - Skyrim SE/AE / Creation Kit install path;
@@ -260,57 +104,40 @@ Open **Settings → Languages & Frameworks → Papyrus** and configure:
 - ambient project name;
 - Papyrus flags file name.
 
-If the configured game path is missing, the runtime resolver can fall back to the supported Bethesda Windows Registry install-path entry. Registry access is read-only.
+If the configured game path is missing, the plugin can use the supported Bethesda Windows Registry install-path entry as a read-only fallback.
 
-## Offline development baseline
+## Safety
 
-The current development build is intentionally tied to the local offline environment unless overridden by Gradle properties. The checked-in defaults currently expect:
+Passive language tooling treats external Papyrus inputs as read-only. The plugin does not silently rewrite Skyrim / Creation Kit files, import-only dependency sources, MO2/mod-manager directories, or the bundled upstream runtime.
 
-- CLion 2026.2.x on platform branch 262; the current resolved installation is expected to be 2026.2.1 / CL-262.9437.136;
-- Java target 25;
-- local Kotlin compiler;
-- the pinned tagged VSIX copied into `vendor/papyrus-lang/v3.3.0-prerelease.1/papyrus-lang-vscode.vsix`;
-- local Skyrim SE/AE / Creation Kit installation;
-- local Papyrus test INI;
-- project-local offline Starter/Driver/JUnit JARs under `third_party/papyrus-test-deps/`.
+Writes are limited to explicit user actions such as normal editing of project files, validated project-owned Rename operations, project-local compile output, plugin settings/cache data, and explicitly generated new project directories.
 
-This is a development/private-build baseline, not a Marketplace-ready distribution configuration.
+For the exact write/read/process boundaries, see [`SAFETY_AUDIT.md`](SAFETY_AUDIT.md).
 
-IDE discovery is product-neutral inside the 262 branch. Resolution order is `-PpapyrusIdeHome`, legacy `-PpapyrusIdeaHome`, `PAPYRUS_IDE_HOME`, then installed JetBrains products. The default product is `CL` and default platform branch is `262`; patch updates inside 2026.2 are selected by the highest `buildNumber`. The Windows launch entry must be 64-bit and must resolve to a `*64.exe` launcher plus matching 64-bit `.vmoptions`. Use `gradlew.bat printIdeTarget` to see the exact resolved installation. A future platform branch such as 263 is intentionally not accepted silently; set `-PpapyrusIdeBranch=263` only after a compatibility audit.
+## Current limitations
 
-## Vendored upstream and offline test dependencies
+- Windows only.
+- CLion 2026.2.x / IntelliJ Platform 262 is the current target.
+- Skyrim SE/AE only.
+- No Papyrus debugger.
+- No Fallout 4 or Skyrim LE support yet.
+- Generic LSP Code Actions are disabled.
+- Advanced Pyro task/package/remote features are intentionally restricted.
 
-The source handoff archive intentionally omits large third-party binaries. Before building locally:
+## Upstream
 
-```text
-vendor/papyrus-lang/v3.3.0-prerelease.1/papyrus-lang-vscode.vsix
-```
+The plugin currently tracks:
 
-must contain the exact **complete, unmodified** `v3.3.0-prerelease.1` VSIX with SHA-256. The full archive is retained, including Fallout 4/debug payloads and the complete Pyro distribution; only the bounded Pyro compile subset is currently active, so later scope expansion does not require a new vendor format:
+`joelday/papyrus-lang v3.3.0-prerelease.1`
 
-```text
-c4cf68d74471d4646b1c7dcff36f30293b507ebee215cc931cef051a0f8766db
-```
+The pinned upstream VSIX is bundled as part of the plugin runtime and provides the language server, TextMate grammars, Pyro runtime, and related Papyrus resources used by the plugin.
 
-Offline test JARs must be copied, preserving their existing `driver/` and `starter/` subdirectories, into:
+## Project documentation
 
-```text
-third_party/papyrus-test-deps/
-```
+Developer and implementation details are kept outside this README:
 
-Gradle no longer reads `Y:/dev/PapyrusTools/unpack/extension` and no longer requires `lib/papyrus-test-deps` inside the IDE installation. Test-dependency JARs are compile/test-only and are not packaged into the user plugin. The built plugin JAR does include the vendored VSIX so installed runtime use remains self-contained.
-
-Papyrus-specific SVGs copied from the pinned VSIX are used where the IDE has no equivalent Papyrus icon; ordinary folders/debugger/general IDE concepts continue to use standard IDE presentation.
-
-## Living documentation
-
-These files are the current sources of truth and should be updated together when behavior changes:
-
-- `README.md` — current architecture, supported behavior, and test model;
-- `PORT_STATUS.md` — authoritative feature parity and coverage matrix;
-- `ROADMAP.md` — only remaining work/decisions;
-- `SAFETY_AUDIT.md` — current write/read/process safety boundaries;
-- `HANDOFF.md` — compact continuation state for the next iteration;
-- `src/main/resources/papyrus-welcome.md` — user-facing Getting Started help bundled into the plugin.
-
-Historical per-version incident logs are intentionally no longer kept in these living docs. Source control, archived source ZIPs, patches, and test reports are the history.
+- [`PORT_STATUS.md`](PORT_STATUS.md) — current feature/parity matrix;
+- [`ROADMAP.md`](ROADMAP.md) — remaining product work and decisions;
+- [`SAFETY_AUDIT.md`](SAFETY_AUDIT.md) — write/read/process safety boundaries;
+- [`HANDOFF.md`](HANDOFF.md) — developer continuation state, build/test history, implementation notes, and environment details;
+- [`INSPECTION_AUDIT.md`](INSPECTION_AUDIT.md) — IDE inspection/code-quality tracking.
