@@ -13,6 +13,7 @@ import com.intellij.ui.components.JBScrollPane;
 import com.intellij.util.ui.FormBuilder;
 import com.intellij.util.ui.JBUI;
 import dev.papyrus.jetbrains.lsp.PapyrusLspIntegrationProvider;
+import dev.papyrus.jetbrains.projects.PapyrusImportLibraryService;
 import dev.papyrus.jetbrains.projects.PapyrusProjectsService;
 import dev.papyrus.jetbrains.status.PapyrusScriptStatusService;
 import org.jetbrains.annotations.Nls;
@@ -109,6 +110,7 @@ public final class PapyrusSettingsConfigurable implements Configurable {
                 PapyrusProjectsService.getInstance(project).invalidateSnapshot();
                 LspClientManager clientManager = LspClientManager.getInstance(project);
                 if (!newEnabled) {
+                    PapyrusImportLibraryService.getInstance(project).clearAsync();
                     clientManager.stopClients(PapyrusLspIntegrationProvider.class);
                 } else if (enabledChanged) {
                     clientManager.startClientsIfNeeded(PapyrusLspIntegrationProvider.class);

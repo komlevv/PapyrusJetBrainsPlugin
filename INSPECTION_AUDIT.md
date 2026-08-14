@@ -1,6 +1,6 @@
 # CLion inspection audit — all 24 submitted screenshots
 
-> Current continuity note (0.2.151 source / 0.2.146 authoritative full-green baseline): the 0.2.145 high-confidence offline AST cleanup plus the 0.2.146 checked-exception correction are user-verified by the full **114/114** Windows gate. 0.2.147 added the script-status background-thread read-access fix; 0.2.148 expanded Definition/physical-shortcut diagnostics; 0.2.150 proved the public-API Papyrus-local shortcut can outrank Rider but its plain wrapper did not navigate; 0.2.151 re-enters the registered platform action through public `ActionManager.tryToExecute(...)` and is pending the 59/20/45 Windows gate. This file remains the living disposition of IDE/static-analysis findings; obsolete per-version audit files have been removed.
+> Current continuity note (0.2.156 source / 0.2.146 authoritative full-green baseline): the 0.2.145 high-confidence offline AST cleanup plus the 0.2.146 checked-exception correction are user-verified by the full **114/114** Windows gate. 0.2.147 added the script-status background-thread read-access fix; 0.2.148 expanded Definition/physical-shortcut diagnostics; 0.2.150 proved the public-API Papyrus-local shortcut can outrank Rider but its plain wrapper did not navigate; 0.2.151 re-enters the registered platform action through public `ActionManager.tryToExecute(...)` and its physical Ctrl+B behavior is user-confirmed; the no-interceptor 0.2.152 diagnostic failed as expected; 0.2.153 proved import-to-import navigation by using managed content roots; 0.2.154 corrects that dependency model to source-only library roots and adds an import-only Go To Declaration bridge; 0.2.156 adds a dedicated library type so those `SOURCES` roots are actually surfaced by the standard External Libraries node. This file remains the living disposition of IDE/static-analysis findings; obsolete per-version audit files have been removed.
 
 
 
@@ -34,6 +34,20 @@ Scope carried forward through **PapyrusJetBrainsPlugin 0.2.145**, retaining the 
 | 24  | Plugin descriptor/live-template i18n plus action-description capitalization                                                                                                                   | Ours                                   | **Fixed.** Added `messages.PapyrusBundle`; configurables/actions use resource keys; all 20 Live Template descriptions use `key` + `resource-bundle`; action description capitalization corrected. Unit contracts verify the localized descriptor surface.                                                                                                                                                                                                                                         |
 
 
+## 0.2.156 API/inspection note
+
+- Uses the public `LibraryType` / `PersistentLibraryKind` extension model and `LibraryEx.ModifiableModelEx.setKind(...)` to describe the plugin-owned source-only import library.
+- `getExternalRootTypes()` returns only `OrderRootType.SOURCES`; no false `CLASSES` classification is introduced just to satisfy Project View rendering.
+- Existing 0.2.154 managed libraries are retagged in place during normal synchronization.
+
+## 0.2.154 API/inspection note
+
+The corrected dependency model stays on public Platform APIs: module libraries use `ModifiableRootModel.getModuleLibraryTable()`, `Library.ModifiableModel`, and `OrderRootType.SOURCES`; imported-file navigation uses the public `GotoDeclarationHandler` extension point. The handler intentionally does not participate for project-content files, so it cannot duplicate the native LSP Definition provider there. No Rider-internal action API or IntelliJ internal LSP implementation type is referenced.
+
+## 0.2.153 API/inspection note
+
+The imported-source fix is implemented entirely with public Platform 262 project-model APIs. The new service uses `ProjectFileIndex` only under read actions and commits root mutations through the JetBrains-recommended `ModuleRootModificationUtil.updateModel(...)` helper. No `WorkspaceModel` internal entity mutation, `LspClientImpl`, `LspClientManagerImpl`, Rider backend API, or internal LSP document-sync API is referenced from production code. The service keeps its own bounded ownership state because the public `ContentEntry` API does not expose a symmetric plugin ownership marker suitable for safely removing only roots created by this plugin.
+
 ## 0.2.151 API/inspection note
 
 The Ctrl+B follow-up stays on public Platform API: `DumbAwareAction`, `AnAction.registerCustomShortcutSet(...)`, `ActionManager.getAction(...)`, and `ActionManager.tryToExecute(...)`. The nested platform action is invoked with no original `InputEvent`, no keyboard-specific action place, and `now=false`; Platform 262 therefore uses the asynchronous execution branch rather than `runUpdateSessionForInputEvent(...)`. No new suppression or internal API dependency is added.
@@ -48,7 +62,7 @@ The Ctrl+B production fix intentionally avoids `ActionUpdaterInterceptor`, `Acti
 - Do not edit generated Starter/CLion diagnostic, telemetry, report, event-stream, or log files.
 - Do not hide real plugin-source warnings with global inspection exclusions.
 - A suppression is acceptable only when the warning is caused by an unavoidable external/platform contract and the suppression is attached to the smallest possible declaration with an explanatory comment.
-- The regression target after this cleanup remains **51 UNIT + 11 PAPYRUS-LANG + 33 REAL CLION UI = 95 tests**.
+- The current 0.2.156 acceptance target is **61 UNIT + 20 PAPYRUS-LANG + 47 REAL CLION UI**; historical smaller gates remain documented only where they identify a verified baseline.
 ## 0.2.128 follow-up
 
 The 0.2.127 runtime gate exposed one stale UI-test selector created by the inspection cleanup: the production Settings label was intentionally changed to `Skyrim Special Edition / Creation Kit installation path:`, but I26 still waited for the old `... path:` literal. The production wording is retained; the test now keys off the actual Settings dialog plus the stable enable checkbox. This is test-harness maintenance, not a rollback of the inspection fix.
@@ -120,3 +134,9 @@ Fixed high-confidence findings:
 - `PapyrusManagedHostCommandLine` and raw-server containment cleanup preserve the original startup failure, attach secondary cleanup failures as suppressed exceptions, and rethrow the original `IOException`, `RuntimeException`, or `Error`.
 
 Remaining MAJOR heuristic findings are intentionally not mechanically changed: the standalone guardian's JDK-only `System.exit`/best-effort gate deletion; `PapyrusUiTestSupport`'s EDT failure-transport `Throwable` catch; data-heavy/large integration-test classes; expected best-effort close/symlink/Robot cleanup in tests. These require a separate semantic refactor or are deliberate boundary behavior, not a reason for fake no-op statements or global suppressions.
+
+## 0.2.156 Project View presentation
+
+- Uses the documented `ProjectViewNodeDecorator` presentation hook rather than replacing JetBrains project-tree nodes.
+- Renaming is presentation-only and applies only to exact roots currently managed by `PapyrusImportLibraryService`.
+- The dependency remains a source-only library; no `CLASSES` or content-root duplication is introduced.

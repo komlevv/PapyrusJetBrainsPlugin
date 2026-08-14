@@ -66,9 +66,9 @@ public final class PapyrusProjectsService {
 
     public void projectsUpdated() {
         invalidateSnapshot();
-        if (!listeners.isEmpty()) {
-            refreshAsync();
-        }
+        // Import-library synchronization depends on project info even when the tool window
+        // has never been opened, so server notifications must always refresh the snapshot.
+        refreshAsync();
     }
 
     public void refreshAsync() {
@@ -113,6 +113,7 @@ public final class PapyrusProjectsService {
                 LOG.warn("Failed to refresh Papyrus project information", throwable);
             }
 
+            boolean acceptedSnapshot = false;
             synchronized (refreshLock) {
                 if (refreshRequested) {
                     continue;
@@ -120,12 +121,17 @@ public final class PapyrusProjectsService {
                 PapyrusLanguageService languageService = PapyrusLanguageService.getInstance(project);
                 if (requestGeneration == invalidationGeneration
                         && responseClient != null
+                        && refreshed != null
                         && languageService.isCurrentRunningClient(responseClient)) {
                     currentSnapshot = new ProjectSnapshot(refreshed, responseClient);
+                    acceptedSnapshot = true;
                 } else {
                     currentSnapshot = null;
                 }
                 refreshing = false;
+            }
+            if (acceptedSnapshot) {
+                PapyrusImportLibraryService.getInstance(project).syncAsync(refreshed);
             }
             notifyListeners();
             return;

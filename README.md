@@ -1,7 +1,7 @@
 > **Status: ALPHA** — active development; behavior and packaging may still change before the first stable release.
 > **Target IDE:** CLion **2026.2.x** on IntelliJ Platform **262**. Verified target: **CLion 2026.2.1 / CL-262.9437.136**.
 > **Platform:** Windows.
-> **Current source:** **0.2.151**. The first editor-local Ctrl+B route in 0.2.150 reached the plugin wrapper but did not navigate; 0.2.151 keeps the Papyrus-local shortcut interception and re-enters the already-working platform `GotoDeclaration` action without the original keyboard event. The Windows real-CLion gate is pending.
+> **Current source:** **0.2.156**. 0.2.151 remains the user-confirmed working CLion/Rider Ctrl+B routing baseline. 0.2.154 moved local Papyrus imports to a source-only `Papyrus Imports` library, 0.2.155 made that source-only library visible under External Libraries, and 0.2.156 reuses the Papyrus Projects include labels for those roots while excluding project-local source/import overlap such as the canonical PPJ source folder that appears in both `<Imports>` and `<Folders>`.
 
 # Papyrus Language Support for JetBrains CLion 
 
@@ -24,6 +24,8 @@ This is a CLion port of `joelday/papyrus-lang`. Plugin uses `v3.3.0-prerelease.1
 - diagnostics;
 - Go to Declaration / Definition;
 - Papyrus-local Go to Declaration shortcut routing for CLion/Rider keyboard arbitration;
+- managed `Papyrus Imports` source-only library under External Libraries, with the same include labels shown by Papyrus Projects;
+- Go to Declaration bridge for import-library-source → import navigation;
 - Find Usages;
 - Quick Definition;
 - Quick Documentation / hover;

@@ -1,7 +1,7 @@
 <idea-plugin>
     <id>dev.papyrus.intellij-papyrus</id>
     <name>Papyrus Language</name>
-    <version>0.2.151</version>
+    <version>0.2.156</version>
 
     <vendor>Local</vendor>
     <resource-bundle>messages.PapyrusBundle</resource-bundle>
@@ -46,8 +46,18 @@
         <platform.lsp.integrationProvider
                 implementation="dev.papyrus.jetbrains.lsp.PapyrusLspIntegrationProvider"/>
 
+        <library.type
+                implementation="dev.papyrus.jetbrains.projects.PapyrusImportLibraryType"/>
+
+        <projectViewNodeDecorator
+                implementation="dev.papyrus.jetbrains.projects.PapyrusImportProjectViewDecorator"/>
+
         <renameHandler
                 implementation="dev.papyrus.jetbrains.lsp.PapyrusRenameHandler"
+                order="first"/>
+
+        <gotoDeclarationHandler
+                implementation="dev.papyrus.jetbrains.lsp.PapyrusGotoDeclarationHandler"
                 order="first"/>
 
         <editorFactoryListener

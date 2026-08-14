@@ -307,6 +307,81 @@ internal class PapyrusEditorFeaturesUiTest {
     }
 
     @Test
+    @Order(46)
+    fun gotoDeclarationNavigatesBetweenVanillaImports() {
+        val quest = UiTestEnvironment.creationKitHome().resolve("Data/Source/Scripts/Quest.psc").toRealPath()
+        val form = UiTestEnvironment.creationKitHome().resolve("Data/Source/Scripts/Form.psc").toRealPath()
+        assertTrue(Files.isRegularFile(quest), "Missing vanilla Quest.psc test dependency: $quest")
+        assertTrue(Files.isRegularFile(form), "Missing vanilla Form.psc test dependency: $form")
+
+        val support = ide.utility<PapyrusUiTestSupportRemote>()
+        val questPath = quest.toString().replace('\\', '/')
+        val formPath = form.toString().replace('\\', '/')
+        ide.waitFor("Papyrus vanilla imports to become library sources", 60.seconds) {
+            !support.isProjectContentFile(ide.project, questPath) &&
+                !support.isProjectContentFile(ide.project, formPath) &&
+                support.isProjectLibrarySourceFile(ide.project, questPath) &&
+                support.isProjectLibrarySourceFile(ide.project, formPath) &&
+                support.papyrusImportLibraryExternalRootTypes(ide.project)
+                    .contains("sourcesExternal=true")
+        }
+
+        val editor = open(quest)
+        val text = editor.getDocument().getText()
+        val extendsForm = text.indexOf("extends Form", ignoreCase = true)
+        assertTrue(extendsForm >= 0, "Quest.psc does not contain the expected extends Form declaration")
+        val usage = extendsForm + "extends ".length + 2
+        focusEditor(editor, usage)
+        invokeAction("GotoDeclaration", editor.getContentComponent())
+
+        ide.waitFor("Goto Declaration from imported Quest.psc to imported Form.psc", NORMAL) {
+            fileEditorManager().getSelectedTextEditor()?.getVirtualFile()?.getPath()?.replace('\\', '/')
+                ?.equals(formPath, ignoreCase = true) == true
+        }
+    }
+
+    @Test
+    @Order(47)
+    fun gotoDeclarationShortcutNavigatesBetweenVanillaImports() {
+        val quest = UiTestEnvironment.creationKitHome().resolve("Data/Source/Scripts/Quest.psc").toRealPath()
+        val form = UiTestEnvironment.creationKitHome().resolve("Data/Source/Scripts/Form.psc").toRealPath()
+        val support = ide.utility<PapyrusUiTestSupportRemote>()
+        val questPath = quest.toString().replace('\\', '/')
+        val formPath = form.toString().replace('\\', '/')
+
+        ide.waitFor("Papyrus vanilla imports to stay library sources", 60.seconds) {
+            !support.isProjectContentFile(ide.project, questPath) &&
+                !support.isProjectContentFile(ide.project, formPath) &&
+                support.isProjectLibrarySourceFile(ide.project, questPath) &&
+                support.isProjectLibrarySourceFile(ide.project, formPath)
+        }
+
+        val editor = open(quest)
+        val text = editor.getDocument().getText()
+        val extendsForm = text.indexOf("extends Form", ignoreCase = true)
+        assertTrue(extendsForm >= 0, "Quest.psc does not contain the expected extends Form declaration")
+        val usage = extendsForm + "extends ".length + 2
+        focusEditor(editor, usage)
+
+        val bindings = support.activeShortcutBindings("GotoDeclaration")
+        support.startShortcutDispatchTrace()
+        invokeShortcut("GotoDeclaration", editor.getContentComponent())
+        try {
+            ide.waitFor("Ctrl+B from imported Quest.psc to imported Form.psc", NORMAL) {
+                fileEditorManager().getSelectedTextEditor()?.getVirtualFile()?.getPath()?.replace('\\', '/')
+                    ?.equals(formPath, ignoreCase = true) == true
+            }
+            support.stopShortcutDispatchTrace()
+        } catch (error: AssertionError) {
+            val trace = support.stopShortcutDispatchTrace()
+            throw AssertionError(
+                "Ctrl+B did not navigate between imported Papyrus scripts. Active keymap: $bindings. Dispatch trace: $trace",
+                error,
+            )
+        }
+    }
+
+    @Test
     @Order(5)
     fun foldingCreatesPapyrusFoldRegions() {
         val editor = open(fixture.target)
@@ -2244,6 +2319,8 @@ internal class PapyrusEditorFeaturesUiTest {
         fun shortcutDispatchTraceSnapshot(): String
         fun stopShortcutDispatchTrace(): String
         fun isProjectContentFile(project: Project, filePath: String): Boolean
+        fun isProjectLibrarySourceFile(project: Project, filePath: String): Boolean
+        fun papyrusImportLibraryExternalRootTypes(project: Project): String
         fun clearPapyrusLspOutputDiagnostic()
         fun papyrusLspOutputDiagnostic(project: Project): String
         fun selectedToolWindowTreePath(project: Project, toolWindowId: String): String

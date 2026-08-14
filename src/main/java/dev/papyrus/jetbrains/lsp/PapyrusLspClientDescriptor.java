@@ -18,6 +18,7 @@ import com.intellij.platform.lsp.api.customization.LspDiagnosticsCustomizer;
 import com.intellij.platform.lsp.api.customization.LspRenameCustomizer;
 import com.intellij.platform.lsp.api.customization.LspRenameDisabled;
 import dev.papyrus.jetbrains.config.PapyrusSettings;
+import dev.papyrus.jetbrains.projects.PapyrusProjectsService;
 import dev.papyrus.jetbrains.runtime.PapyrusLaunchConfiguration;
 import dev.papyrus.jetbrains.runtime.PapyrusLaunchConfigurationResolver;
 import dev.papyrus.jetbrains.runtime.PapyrusManagedHostCommandLine;
@@ -143,6 +144,10 @@ public final class PapyrusLspClientDescriptor extends ProjectWideLspClientDescri
                     syncOptions.setChange(TextDocumentSyncKind.None);
                     capabilities.setTextDocumentSync(Either.forRight(syncOptions));
                 }
+
+                // Project info supplies the authoritative Papyrus import graph. Refresh after
+                // capability normalization so imports become IntelliJ content before navigation.
+                PapyrusProjectsService.getInstance(getProject()).refreshAsync();
             }
         };
     }

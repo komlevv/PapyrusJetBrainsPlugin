@@ -29,7 +29,16 @@ import com.intellij.execution.ProgramRunnerUtil;
 import com.intellij.execution.RunManager;
 import com.intellij.execution.configurations.ConfigurationTypeUtil;
 import com.intellij.openapi.project.Project;
+import com.intellij.openapi.module.Module;
+import com.intellij.openapi.module.ModuleManager;
+import com.intellij.openapi.roots.LibraryOrderEntry;
+import com.intellij.openapi.roots.ModuleRootManager;
+import com.intellij.openapi.roots.OrderEntry;
+import com.intellij.openapi.roots.OrderRootType;
 import com.intellij.openapi.roots.ProjectFileIndex;
+import com.intellij.openapi.roots.impl.libraries.LibraryEx;
+import com.intellij.openapi.roots.libraries.Library;
+import com.intellij.openapi.roots.libraries.LibraryType;
 import com.intellij.task.ProjectTaskRunner;
 import com.intellij.openapi.wm.ToolWindow;
 import com.intellij.openapi.wm.ToolWindowManager;
@@ -535,6 +544,58 @@ public final class PapyrusUiTestSupport {
             return false;
         }
         return ReadAction.computeBlocking(() -> ProjectFileIndex.getInstance(project).isInContent(file));
+    }
+
+    public static boolean isProjectLibrarySourceFile(Project project, String filePath) {
+        requireEnabled();
+        if (filePath == null || filePath.isBlank()) {
+            return false;
+        }
+        VirtualFile file = LocalFileSystem.getInstance().findFileByPath(filePath.replace('\\', '/'));
+        if (file == null) {
+            return false;
+        }
+        return ReadAction.computeBlocking(() -> ProjectFileIndex.getInstance(project).isInLibrarySource(file));
+    }
+
+    public static String papyrusImportLibraryExternalRootTypes(Project project) {
+        requireEnabled();
+        return ReadAction.computeBlocking(() -> {
+            for (Module module : ModuleManager.getInstance(project).getModules()) {
+                for (OrderEntry entry : ModuleRootManager.getInstance(module).getOrderEntries()) {
+                    if (!(entry instanceof LibraryOrderEntry libraryEntry)) {
+                        continue;
+                    }
+                    Library library = libraryEntry.getLibrary();
+                    if (library == null || library.getName() == null
+                            || !library.getName().startsWith("Papyrus Imports")) {
+                        continue;
+                    }
+                    if (!(library instanceof LibraryEx extendedLibrary) || extendedLibrary.getKind() == null) {
+                        return "kind=<none>;sourcesExternal=false;classesExternal=false";
+                    }
+
+                    LibraryType<?> type;
+                    try {
+                        type = LibraryType.findByKind(extendedLibrary.getKind());
+                    } catch (RuntimeException exception) {
+                        return "kind=" + extendedLibrary.getKind().getKindId()
+                                + ";sourcesExternal=false;classesExternal=false";
+                    }
+
+                    boolean sourcesExternal = false;
+                    boolean classesExternal = false;
+                    for (OrderRootType rootType : type.getExternalRootTypes()) {
+                        sourcesExternal |= rootType == OrderRootType.SOURCES;
+                        classesExternal |= rootType == OrderRootType.CLASSES;
+                    }
+                    return "kind=" + extendedLibrary.getKind().getKindId()
+                            + ";sourcesExternal=" + sourcesExternal
+                            + ";classesExternal=" + classesExternal;
+                }
+            }
+            return "<missing>";
+        });
     }
 
     @TestOnly

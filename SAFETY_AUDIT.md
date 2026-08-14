@@ -1,7 +1,7 @@
 # Papyrus JetBrains Plugin safety audit — current baseline
 
 
-Current source baseline: **0.2.151**; latest authoritative full-green baseline: **0.2.146**. It carries forward the plugin-owned fixes for all 24 submitted CLion inspection screenshots and all three earlier parity stages, then adds Stage 4 bounded PPJ task discovery/compiler-output navigation without widening the compile destination policy. The latest user-verified full runtime gate is **0.2.146 — 59/59 UNIT, 16/16 PAPYRUS-LANG, 39/39 REAL CLION UI = 114/114**. 0.2.126 keeps the naming and safe Rename persistence coverage from 0.2.125; vendor/generated artifacts remain untouched. `INSPECTION_AUDIT.md` is the authoritative per-screenshot disposition. Safe Rename, bounded explicit Pyro compilation, the native `Papyrus Project` Run Configuration, and the opt-in Build Project bridge remain VERIFIED; Stage 4 task discovery/matcher remains verified by the 0.2.146 full Windows gate. The active target is CLion 2026.2.1 / IntelliJ Platform 262. Legacy `dev.papyrus.intellij...` plugin/configuration/state identifiers are intentionally retained only as compatibility IDs; they do not indicate an IntelliJ IDEA runtime target.
+Current source baseline: **0.2.156**; latest authoritative full-green baseline: **0.2.146**. It carries forward the plugin-owned fixes for all 24 submitted CLion inspection screenshots and all three earlier parity stages, then adds Stage 4 bounded PPJ task discovery/compiler-output navigation without widening the compile destination policy. The latest user-verified full runtime gate is **0.2.146 — 59/59 UNIT, 16/16 PAPYRUS-LANG, 39/39 REAL CLION UI = 114/114**. 0.2.126 keeps the naming and safe Rename persistence coverage from 0.2.125; vendor/generated artifacts remain untouched. `INSPECTION_AUDIT.md` is the authoritative per-screenshot disposition. Safe Rename, bounded explicit Pyro compilation, the native `Papyrus Project` Run Configuration, and the opt-in Build Project bridge remain VERIFIED; Stage 4 task discovery/matcher remains verified by the 0.2.146 full Windows gate. The active target is CLion 2026.2.1 / IntelliJ Platform 262. Legacy `dev.papyrus.intellij...` plugin/configuration/state identifiers are intentionally retained only as compatibility IDs; they do not indicate an IntelliJ IDEA runtime target.
 
 0.2.141 changes diagnostics verification only. It adds no `publishDiagnostics` interception, no LSP cache observer, and no production diagnostics branch. Raw server coverage still verifies incremental invalid → valid → invalid push diagnostics directly. REAL CLION I35 now mirrors the same semantic edits with incremental `if → Debug.Trace(...) → if` replacements and compares the same native `HighlightSeverity.ERROR` position before and after the valid state, avoiding any assumption about parser error ranges for unrelated malformed syntax. Production safety boundaries, document-sync compatibility, Windows Job Object containment, and compile path validation are unchanged.
 
@@ -13,6 +13,24 @@ The explicit Compile Project action and opt-in Build Project bridge write proces
 
 This file describes the **current safety model**, not historical incidents.
 
+
+## 0.2.156 library-type visibility review
+
+0.2.156 does not broaden filesystem ownership. The managed import directories remain `OrderRootType.SOURCES` only and remain outside project content. The change only assigns the plugin-owned library a dedicated public IntelliJ `LibraryType` whose external root type is `SOURCES`, allowing the standard External Libraries view to display the existing source roots. No import directory is added as `CLASSES`, no user library is adopted, and the 0.2.153 content-root migration remains intentionally absent.
+
+## 0.2.154 import-library safety review
+
+0.2.154 no longer adds dependency directories as module content entries. It creates/updates only the plugin-recorded module library and only its `OrderRootType.SOURCES` roots. A pre-existing user library named `Papyrus Imports` is not adopted; the plugin falls back to `Papyrus Imports (Papyrus Language)`. Disabling Papyrus removes only the library recorded in the 0.2.154 plugin state. Per user request, old 0.2.153 content roots are not migrated or removed automatically.
+
+The import Go To Declaration bridge is read-only. It is gated to `.psc` files outside project content that are library sources or are present in the current Papyrus import graph, sends only `textDocument/definition`, and returns navigation targets. It performs no file write, project-root mutation, keymap mutation, rename, or compiler action.
+
+## 0.2.153 import-content-root safety review
+
+0.2.153 intentionally changes the IDE project model: local, non-remote Papyrus import directories reported by the running language server may be added as module content roots so Platform 262 native LSP accepts imported `.psc` editors. This does **not** alter imported script contents, PPJ files, compiler inputs, game files, or the global keymap.
+
+Ownership is bounded. If a desired import is already covered by user/IDE content, Papyrus leaves it untouched and does not record ownership. The plugin records only exact roots it added itself. When the import graph changes or Papyrus support is disabled, only those recorded exact content entries are candidates for removal. Duplicate and nested import directories are collapsed before mutation; remote imports and missing/non-directory paths are ignored. Rename safety continues to classify write eligibility from Papyrus source/include provenance, not merely from `ProjectFileIndex`, so promoting imports to IDE content does not make import-only Rename targets writable.
+
+The implementation uses public project-model APIs (`ProjectFileIndex`, `ModuleRootManager`, `ModuleRootModificationUtil`, `ModifiableRootModel`) and relies on Platform 262's own `ContentRootEntity` change handling to re-process open LSP documents. No Rider internal APIs or custom LSP document-opening shortcut is introduced.
 
 ## 0.2.151 shortcut execution safety review
 
@@ -318,3 +336,8 @@ In particular, there is no current safety guarantee for future implementations o
 Those features remain held/out-of-scope precisely so the existing safety guarantee is not weakened. Papyrus Rename is VERIFIED inside the bounded active-write model at 0.2.112, and bounded Compile Project is VERIFIED at 0.2.115. The verified 0.2.117 `ProjectTaskRunner` is an additional opt-in entry point to that same compile boundary. Its registration alone does not alter ordinary projects because `canRun` is false unless the project setting explicitly selects Papyrus build. The New Project wizard runtime introduced in 0.2.118 is the only path that opts a just-created Papyrus project into that build mode automatically.
 
 0.2.143 is test-harness-only. It restored `DialogUiComponent.okButton`, but the user reproduced the same wizard hang, disproving the button-locator hypothesis as the root cause. 0.2.144 fixes the actual 0.2.142/0.2.143 race by restoring independent wizard discovery before project readiness, matching the full-green 0.2.138 ordering. Production plugin behavior, process containment, compile boundaries, and debugger behavior are unchanged.
+
+## 0.2.156 import presentation safety
+
+- Project View labels are derived from read-only `papyrus/projectInfos` metadata and do not modify PPJ files or dependency directories.
+- Project-local paths already represented by non-remote source includes are excluded from the managed external library rather than removed from the filesystem.

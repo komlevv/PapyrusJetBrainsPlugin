@@ -4,7 +4,7 @@ This document contains only **remaining decisions/work**. Completed per-version 
 
 ## Current baseline
 
-- Current source: **0.2.151**. 0.2.150 proved that a Papyrus-local custom shortcut outranks the Rider backend composite action but its plain `ActionUtil.wrap(GotoDeclaration)` delegate still did not navigate. 0.2.151 keeps that local shortcut priority and re-runs the registered platform `GotoDeclaration` action through public `ActionManager.tryToExecute(...)` asynchronously with no original `KeyEvent`. The `now=false` path avoids `runUpdateSessionForInputEvent(...)`, rebuilds the `DataContext` from the editor component, and then performs the registered platform action.
+- Current source: **0.2.156**. 0.2.151's editor-local Ctrl+B route is user-confirmed working; 0.2.154 moved imports to a source-only library, 0.2.155 made source-only roots visible under External Libraries, and 0.2.156 aligns External Libraries root labels with Papyrus Projects and excludes imports already represented by local project sources.
 - 0.2.126: plugin-owned cleanup for all 24 submitted CLion inspection screenshots; no intended Papyrus feature change.
 - Current authoritative gate: user-verified **59 unit / 16 exact-upstream server / 39 real-CLion = 114/114** on **0.2.146**.
 - Hardened semantic Papyrus Rename is VERIFIED at the 0.2.112 baseline.
@@ -18,6 +18,34 @@ This document contains only **remaining decisions/work**. Completed per-version 
 - The 0.2.115 gate is fully green and verifies the validated PPJ snapshot, real bundled Pyro, real Creation Kit compiler, project-local output, and source immutability.
 
 The current safe/read-only SSE/AE feature set is in good parity shape. See `PORT_STATUS.md` for the detailed matrix.
+
+## 0.2.156 acceptance gate
+
+- `Papyrus Imports` remains source-only: imports are `ProjectFileIndex.isInLibrarySource == true` and `ProjectFileIndex.isInContent == false`.
+- The managed library uses the Papyrus import library kind and exposes `OrderRootType.SOURCES` as its external root type.
+- `Papyrus Imports` is visible under External Libraries without adding the import directories as project content or library `CLASSES`.
+- Import-root display names reuse `PapyrusProjectsPresentation.formatIncludeLabel`, e.g. `Data: Scripts` and `racemenu: scripts`.
+- A local source directory that is also listed in PPJ `<Imports>` is not duplicated under External Libraries.
+- `project.psc -> imported Quest.psc -> imported Form.psc` continues to work, including physical Ctrl+B.
+- Expected gate is **62 UNIT + 20 PAPYRUS-LANG + 47 REAL CLION UI**.
+
+## 0.2.154 acceptance gate
+
+- Papyrus imports are `ProjectFileIndex.isInLibrarySource == true`.
+- Papyrus imports are `ProjectFileIndex.isInContent == false`.
+- `project.psc -> imported Quest.psc` keeps the native project-content Definition path.
+- `imported Quest.psc -> imported Form.psc` works through the import-only Go To Declaration bridge.
+- Physical Ctrl+B keeps the user-confirmed 0.2.151 editor-local shortcut route.
+- Historical expected gate: **60 UNIT + 20 PAPYRUS-LANG + 47 REAL CLION UI**.
+
+## 0.2.153 acceptance gate
+
+- Keep the user-confirmed 0.2.151 Papyrus-local Ctrl+B interceptor.
+- Confirm local Papyrus import directories reported by `papyrus/projectInfos` become IntelliJ content without opening the Papyrus Projects tool window.
+- Confirm existing user/IDE content roots are not adopted or removed by the Papyrus manager.
+- Confirm direct `GotoDeclaration` from imported `Quest.psc` to imported `Form.psc`.
+- Confirm physical Ctrl+B from imported `Quest.psc` to imported `Form.psc`.
+- Run the expanded Windows gate: **60 UNIT + 20 PAPYRUS-LANG + 47 REAL CLION UI**.
 
 ## 0.2.151 acceptance gate
 

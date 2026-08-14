@@ -1,12 +1,12 @@
-# Papyrus JetBrains Plugin port status — 0.2.151 source
+# Papyrus JetBrains Plugin port status — 0.2.156 source
 
 Current status: **ALPHA**. Active compatibility target: **CLion 2026.2.x / IntelliJ Platform 262**; verified target: **CLion 2026.2.1 / CL-262.9437.136**.
 
-The current source is **0.2.151**. The latest authoritative full-green Windows baseline remains **0.2.146: 59/59 UNIT + 16/16 PAPYRUS-LANG + 39/39 REAL CLION UI = 114/114**. The expanded 0.2.148 investigation gate is **59 UNIT + 20 PAPYRUS-LANG + 45 REAL CLION UI**; its three physical Ctrl+B scenarios intentionally reproduced the CLion/Rider shortcut-dispatch defect. The user's 0.2.150 gate kept 59/59 UNIT and 20/20 PAPYRUS-LANG green but failed exactly the three physical Ctrl+B scenarios because the editor-local `AnActionWrapper` was performed without navigation. 0.2.151 replaces only that wrapper execution strategy and is pending the next Windows gate.
+The current source is **0.2.156**. The latest authoritative full-green Windows baseline remains **0.2.146: 59/59 UNIT + 16/16 PAPYRUS-LANG + 39/39 REAL CLION UI = 114/114**. The expanded 0.2.148 investigation gate is **59 UNIT + 20 PAPYRUS-LANG + 45 REAL CLION UI**; its three physical Ctrl+B scenarios intentionally reproduced the CLion/Rider shortcut-dispatch defect. The user's 0.2.150 gate kept 59/59 UNIT and 20/20 PAPYRUS-LANG green but failed exactly the three physical Ctrl+B scenarios because the editor-local `AnActionWrapper` was performed without navigation. 0.2.151 replaced that wrapper execution strategy and the user has since confirmed the resulting Ctrl+B path works in real CLion. The diagnostic 0.2.152 removal of the interceptor failed; 0.2.153 retains 0.2.151 and targets imported-source LSP continuity.
 
 ## Baseline
 
-- Plugin source version: **0.2.151**.
+- Plugin source version: **0.2.156**.
 - 0.2.126 is the all-24 plugin-source inspection cleanup; expected runtime behavior is unchanged.
 - Authoritative Windows gate: user-verified **0.2.146 — 59/59 UNIT, 16/16 PAPYRUS-LANG, 39/39 REAL CLION UI = 114/114**.
 - Hardened LSP-semantic **Refactor | Rename** is VERIFIED at the 0.2.112 baseline.
@@ -19,9 +19,44 @@ The current source is **0.2.151**. The latest authoritative full-green Windows b
 - 0.2.115 full gate verified the bundled-Pyro XML-declaration compatibility snapshot and the project-local write boundary end-to-end.
 
 
-## 0.2.151 Ctrl+B direct-action re-entry
+
+## 0.2.156 External Libraries naming
+
+The user confirmed `Papyrus Imports` is now visible under External Libraries. 0.2.156 keeps the 0.2.155 source-only library model and import-to-import navigation unchanged, but decorates exact managed import-root directory nodes with the same `PapyrusProjectsPresentation.formatIncludeLabel(...)` text used by the Papyrus Projects tool window. This replaces ambiguous leaf-only names such as `Scripts`, `scripts`, and `Source` with labels such as `Data: Scripts`, `racemenu: scripts`, and `PapyrusUtil AE SE - Scripting Utility Functions: Source`.
+
+Papyrus project files commonly list their own source directory in both `<Imports>` and `<Folders>`; the upstream `skyrimse.ppj` does this for `.\Source\Scripts`. Such local source/import overlap is now excluded from the managed external library, so a project-local `src: src` entry is not duplicated under External Libraries. Expected gate: **62 UNIT + 20 PAPYRUS-LANG + 47 REAL CLION UI**.
+
+## 0.2.155 source-only library visibility
 
 **Status: IMPLEMENTED, pending Windows acceptance gate.**
+
+Real use of 0.2.154 confirmed that `project -> import -> import` Go To Declaration works and that the import files are correctly classified as library sources, but the `External Libraries` node remained empty. IntelliJ's default `LibraryType.DEFAULT_EXTERNAL_ROOT_TYPES` contains only `OrderRootType.CLASSES`; therefore an ordinary named library with only `SOURCES` roots is intentionally filtered out of the External Libraries project-view node.
+
+0.2.155 keeps the same source-only module library and import-only Go To Declaration bridge, but assigns the managed library a dedicated `PapyrusImportLibraryType`. Its external root types are exactly `OrderRootType.SOURCES`. Existing plugin-managed 0.2.154 libraries are retagged in place on the next synchronization; import directories are not duplicated as `CLASSES` and are not promoted back to project content. The real-CLion import test now also requires the managed library type to report `SOURCES` as an external root. Expected gate for 0.2.155: **61 UNIT + 20 PAPYRUS-LANG + 47 REAL CLION UI**.
+
+## 0.2.154 Papyrus imports as External Libraries
+
+**Status: IMPLEMENTED, pending Windows acceptance gate.**
+
+0.2.153 proved the import-to-import failure and restored navigation by promoting Papyrus import directories to IntelliJ content roots. Real use confirmed the navigation fix, but those dependency directories then appeared as top-level project folders. 0.2.154 corrects the project model: local, non-remote Papyrus imports from `papyrus/projectInfos` are attached to the owning module as source roots of one managed module library named `Papyrus Imports`, so they are dependencies rather than project content. Runtime use confirmed the declaration chain but also showed that IntelliJ does not render an ordinary source-only library in the **External Libraries** node; 0.2.156 fixes that visibility rule with a dedicated library type.
+
+Platform 262 native LSP intentionally rejects library-source documents because they are not `ProjectFileIndex.isInContent(...)`. To preserve `Ctrl+B` / Go To Declaration from an imported `.psc`, 0.2.154 registers a narrow public `GotoDeclarationHandler`: it returns `null` for project-content files so native LSP remains authoritative there, and only for Papyrus import library sources does it send `textDocument/definition` directly to the already-running papyrus-lang client and convert the result to PSI navigation targets. This also avoids duplicate declaration targets between the bridge and native LSP.
+
+No 0.2.153 content-root migration is performed. Users who tested 0.2.153 must remove those dependency content roots manually once; 0.2.154 will not adopt or delete them. The existing 47 REAL CLION UI gate now requires vanilla `Quest.psc` / `Form.psc` to be library sources and explicitly **not** project content before exercising both direct Go To Declaration and physical Ctrl+B.
+
+## 0.2.153 imported-source content roots
+
+**Status: IMPLEMENTED, pending Windows acceptance gate.**
+
+Real use exposed a second Definition boundary after the 0.2.151 shortcut fix: `project.psc -> RaceMenuBase.psc` worked, but `RaceMenuBase.psc -> Quest.psc` failed when both targets were Papyrus imports. Platform 262 native LSP rejects files outside `ProjectFileIndex.isInContent(...)` before it asks `PapyrusLspClientDescriptor.isSupportedFile(...)`. An LSP Definition response can still open an external target, which explains why the first hop succeeds, but once that imported file is the active document the native LSP feature pipeline no longer owns it.
+
+0.2.153 mirrors **local, non-remote Papyrus import directories reported by `papyrus/projectInfos`** into the IntelliJ module content model. Nested/duplicate import roots are collapsed. Existing user/IDE content roots are never adopted as Papyrus-owned. Only roots actually added by the plugin are persisted in the plugin project state and are eligible for later removal when the import graph changes or Papyrus support is disabled. Root changes use the public `ModuleRootModificationUtil` / `ModifiableRootModel` APIs. Platform 262 already listens for `ContentRootEntity` changes and re-processes open files, so existing LSP clients receive the normal `didOpen` path once an imported editor becomes project content.
+
+The 0.2.151 editor-local Ctrl+B interceptor is retained unchanged. The diagnostic 0.2.152 no-interceptor experiment failed in user testing and is not the baseline. New real-CLion acceptance coverage verifies both direct `GotoDeclaration` and physical Ctrl+B from imported vanilla `Quest.psc` to imported vanilla `Form.psc`. Expected expanded gate: **60 UNIT + 20 PAPYRUS-LANG + 47 REAL CLION UI**.
+
+## 0.2.151 Ctrl+B direct-action re-entry
+
+**Status: USER-CONFIRMED for the reported Ctrl+B behavior; full expanded gate status is separate.**
 
 0.2.150 successfully moved physical Ctrl+B ahead of Rider's backend composite action: the dispatch trace now shows the Papyrus editor-local wrapper being selected and performed. The same gate also proved that `ActionUtil.wrap(GotoDeclaration)` is not sufficient in this CLion/Rider shortcut context because no navigation follows. 0.2.151 keeps the editor-local custom shortcut, but its local `DumbAwareAction` calls public `ActionManager.tryToExecute(...)` on the registered platform `GotoDeclaration` action with a `null` input event, the editor content component as context, and no keyboard-specific action place. With `now=false`, Platform 262 waits for focus to settle, rebuilds the `DataContext` from the editor component, updates the exact supplied action without the input-event dispatcher, and performs it with `inputEvent=null`. This happens after keyboard shortcut arbitration has completed and does not replace the global keymap, hard-code Ctrl+B, invoke Rider internals, or change LSP Definition semantics.
 
