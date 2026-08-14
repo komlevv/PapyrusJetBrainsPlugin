@@ -25,6 +25,11 @@ final class RawLspClient implements AutoCloseable {
     private static final Pattern METHOD = Pattern.compile("\\\"method\\\"\\s*:\\s*\\\"([^\\\"]+)\\\"");
     private static final Pattern EMPTY_DIAGNOSTICS = Pattern.compile("\\\"diagnostics\\\"\\s*:\\s*\\[\\s*\\]");
 
+    enum CapabilityProfile {
+        DYNAMIC_TEST_CLIENT,
+        JETBRAINS_262
+    }
+
     record ServerRequest(int id, String method, String json) {}
     record ServerNotification(String method, String json) {}
 
@@ -48,6 +53,13 @@ final class RawLspClient implements AutoCloseable {
     }
 
     String initialize() throws Exception {
+        return initialize(CapabilityProfile.DYNAMIC_TEST_CLIENT);
+    }
+
+    String initialize(CapabilityProfile profile) throws Exception {
+        String definitionCapabilities = profile == CapabilityProfile.JETBRAINS_262
+                ? "\"definition\":{\"linkSupport\":true},"
+                : "\"definition\":{\"dynamicRegistration\":true},";
         String response = request("initialize", "{"
                 + "\"processId\":null,"
                 + "\"rootUri\":" + json(rootUri) + ","
@@ -56,7 +68,7 @@ final class RawLspClient implements AutoCloseable {
                 + "\"workspace\":{\"applyEdit\":false,\"didChangeWatchedFiles\":{\"dynamicRegistration\":false}},"
                 + "\"textDocument\":{"
                 + "\"completion\":{\"dynamicRegistration\":true},"
-                + "\"definition\":{\"dynamicRegistration\":true},"
+                + definitionCapabilities
                 + "\"hover\":{\"dynamicRegistration\":true},"
                 + "\"signatureHelp\":{\"dynamicRegistration\":true},"
                 + "\"references\":{\"dynamicRegistration\":true},"
@@ -106,13 +118,21 @@ final class RawLspClient implements AutoCloseable {
 
 
     ServerRequest awaitReferencesRegistration(Duration timeout) throws InterruptedException {
+        return awaitRegistration("textDocument/references", timeout);
+    }
+
+    ServerRequest awaitDefinitionRegistration(Duration timeout) throws InterruptedException {
+        return awaitRegistration("textDocument/definition", timeout);
+    }
+
+    private ServerRequest awaitRegistration(String capability, Duration timeout) throws InterruptedException {
         long deadline = System.nanoTime() + timeout.toNanos();
         while (true) {
             long remaining = deadline - System.nanoTime();
             if (remaining <= 0) return null;
             ServerRequest request = requests.poll(remaining, TimeUnit.NANOSECONDS);
             if (request == null) return null;
-            if ("client/registerCapability".equals(request.method()) && request.json().contains("textDocument/references")) return request;
+            if ("client/registerCapability".equals(request.method()) && request.json().contains(capability)) return request;
         }
     }
 

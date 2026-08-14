@@ -16,6 +16,7 @@ import java.util.concurrent.locks.LockSupport;
 
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
+import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 @EnabledOnOs(OS.WINDOWS)
@@ -30,6 +31,24 @@ final class PapyrusServerFeatureTest {
             assertNotNull(registration, "papyrus-lang must use LSP dynamic registration");
             assertTrue(registration.json().contains("textDocument/references"),
                     "dynamic registration must include textDocument/references: " + registration.json());
+        }
+    }
+
+    @Test
+    void jetBrains262DefinitionCapabilityUsesStaticProvider() throws Exception {
+        try (Fixture fixture = Fixture.start("definition-capability-jetbrains-262", RawLspClient.CapabilityProfile.JETBRAINS_262)) {
+            String response = fixture.initializeResponse;
+            assertRpcSuccess(response, "initialize JetBrains 262 definition capability");
+            assertTrue(
+                    response.contains("\"definitionProvider\":true")
+                            || response.contains("\"definitionProvider\":{"),
+                    "JetBrains 2026.2 requires a static definitionProvider because its Go To Declaration gate does not consult dynamic definition registrations: "
+                            + response
+            );
+            assertNull(
+                    fixture.client.awaitDefinitionRegistration(Duration.ofSeconds(1)),
+                    "A client that does not advertise definition.dynamicRegistration must not require a dynamic textDocument/definition registration"
+            );
         }
     }
 
@@ -291,6 +310,78 @@ final class PapyrusServerFeatureTest {
             assertRpcSuccess(response, "definition");
             assertTrue(response.contains(RawLspClient.json(scripts.targetUri())),
                     "definition must navigate to DefinitionTarget: " + response);
+        }
+    }
+
+    @Test
+    void definitionResolvesLocalScriptTypeWithJetBrains262Capabilities() throws Exception {
+        String target = """
+                Scriptname DefinitionTypeTarget extends Quest
+
+                Function SharedProbe()
+                EndFunction
+                """;
+        String caller = """
+                Scriptname DefinitionTypeCaller extends Quest
+                DefinitionTypeTarget Property Target Auto
+                """;
+        try (Fixture fixture = Fixture.start("definition-local-type-jetbrains-262", RawLspClient.CapabilityProfile.JETBRAINS_262)) {
+            OpenedScriptPair scripts = openScriptPair(
+                    fixture, "DefinitionTypeTarget.psc", target, "DefinitionTypeCaller.psc", caller);
+            String response = definitionAt(
+                    fixture, scripts.callerUri(), caller, caller.indexOf("DefinitionTypeTarget") + 2);
+            assertTrue(response.contains(RawLspClient.json(scripts.targetUri())),
+                    "definition on a local Papyrus script type must navigate to its script file: " + response);
+        }
+    }
+
+    @Test
+    void definitionResolvesImportedScriptTypeWithJetBrains262Capabilities() throws Exception {
+        String importedText = """
+                Scriptname DefinitionImportedTarget extends Quest
+
+                Function ImportedProbe()
+                EndFunction
+                """;
+        String callerText = """
+                Scriptname DefinitionImportedCaller extends Quest
+                DefinitionImportedTarget Property Target Auto
+                """;
+
+        try (Fixture fixture = Fixture.start("definition-imported-type-jetbrains-262", RawLspClient.CapabilityProfile.JETBRAINS_262)) {
+            Path importDir = fixture.workspace.resolve(Path.of("Import", "Scripts"));
+            Files.createDirectories(importDir);
+            Path importedFile = importDir.resolve("DefinitionImportedTarget.psc");
+            Files.writeString(importedFile, importedText, StandardCharsets.UTF_8);
+            Path callerFile = fixture.writeScript("DefinitionImportedCaller.psc", callerText);
+            fixture.addImport(".\\Import\\Scripts");
+            fixture.restartAfterScripts();
+
+            String callerUri = fixture.openScript(callerFile, callerText);
+            String response = definitionAt(
+                    fixture, callerUri, callerText, callerText.indexOf("DefinitionImportedTarget") + 2);
+            assertTrue(response.contains(RawLspClient.json(importedFile.toUri().toString())),
+                    "definition on a PPJ imported script type must navigate to the imported script file: " + response);
+        }
+    }
+
+    @Test
+    void definitionResolvesVanillaQuestWithJetBrains262Capabilities() throws Exception {
+        String callerText = """
+                Scriptname DefinitionVanillaCaller extends Quest
+                """;
+
+        try (Fixture fixture = Fixture.start("definition-vanilla-quest-jetbrains-262", RawLspClient.CapabilityProfile.JETBRAINS_262)) {
+            Path questFile = fixture.creationKitScript("Quest.psc");
+            assertTrue(Files.isRegularFile(questFile), "Missing vanilla Quest.psc test dependency: " + questFile);
+            Path callerFile = fixture.writeScript("DefinitionVanillaCaller.psc", callerText);
+            fixture.restartAfterScripts();
+
+            String callerUri = fixture.openScript(callerFile, callerText);
+            String response = definitionAt(
+                    fixture, callerUri, callerText, callerText.indexOf("Quest") + 2);
+            assertTrue(response.contains(RawLspClient.json(questFile.toUri().toString())),
+                    "definition on vanilla Quest must navigate to Data/Source/Scripts/Quest.psc: " + response);
         }
     }
 
@@ -812,17 +903,33 @@ final class PapyrusServerFeatureTest {
         private RawLspClient client;
         private String initializeResponse;
         private Path scriptFile;
+        private final RawLspClient.CapabilityProfile capabilityProfile;
 
-        private Fixture(ServerTestEnvironment environment, Path workspace, Path stderr) {
+        private Fixture(
+                ServerTestEnvironment environment,
+                Path workspace,
+                Path stderr,
+                RawLspClient.CapabilityProfile capabilityProfile
+        ) {
             this.environment = environment;
             this.workspace = workspace;
             this.stderr = stderr;
+            this.capabilityProfile = capabilityProfile;
         }
 
         static Fixture start(String name) throws Exception {
+            return start(name, RawLspClient.CapabilityProfile.DYNAMIC_TEST_CLIENT);
+        }
+
+        static Fixture start(String name, RawLspClient.CapabilityProfile capabilityProfile) throws Exception {
             ServerTestEnvironment environment = ServerTestEnvironment.load();
             Path workspace = environment.createWorkspace(name);
-            Fixture fixture = new Fixture(environment, workspace, environment.outputDir.resolve(name + "-stderr.log"));
+            Fixture fixture = new Fixture(
+                    environment,
+                    workspace,
+                    environment.outputDir.resolve(name + "-stderr.log"),
+                    capabilityProfile
+            );
             fixture.startProcess();
             return fixture;
         }
@@ -879,6 +986,10 @@ final class PapyrusServerFeatureTest {
             return scriptFile.toUri().toString();
         }
 
+        Path creationKitScript(String name) throws Exception {
+            return environment.creationKitHome.resolve(Path.of("Data", "Source", "Scripts", name)).toRealPath();
+        }
+
         void restartAfterScripts() throws Exception {
             stopProcess();
             startProcess();
@@ -887,7 +998,7 @@ final class PapyrusServerFeatureTest {
         private void startProcess() throws Exception {
             process = environment.startServer(workspace, stderr);
             client = new RawLspClient(process, workspace.toUri().toString());
-            initializeResponse = client.initialize();
+            initializeResponse = client.initialize(capabilityProfile);
             assertRpcSuccess(initializeResponse, "initialize");
         }
 

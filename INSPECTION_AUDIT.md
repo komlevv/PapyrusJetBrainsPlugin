@@ -1,6 +1,6 @@
 # CLion inspection audit — all 24 submitted screenshots
 
-> Current continuity note (0.2.147 source / 0.2.146 verified): the 0.2.145 high-confidence offline AST cleanup plus the 0.2.146 checked-exception correction are user-verified by the full **114/114** Windows gate. 0.2.147 adds the script-status background-thread read-access fix and is pending the next Windows gate. This file remains the living disposition of IDE/static-analysis findings; obsolete per-version audit files have been removed.
+> Current continuity note (0.2.151 source / 0.2.146 authoritative full-green baseline): the 0.2.145 high-confidence offline AST cleanup plus the 0.2.146 checked-exception correction are user-verified by the full **114/114** Windows gate. 0.2.147 added the script-status background-thread read-access fix; 0.2.148 expanded Definition/physical-shortcut diagnostics; 0.2.150 proved the public-API Papyrus-local shortcut can outrank Rider but its plain wrapper did not navigate; 0.2.151 re-enters the registered platform action through public `ActionManager.tryToExecute(...)` and is pending the 59/20/45 Windows gate. This file remains the living disposition of IDE/static-analysis findings; obsolete per-version audit files have been removed.
 
 
 
@@ -32,6 +32,15 @@ Scope carried forward through **PapyrusJetBrainsPlugin 0.2.145**, retaining the 
 | 22  | `build.gradle.kts` redundant qualifier; `println` → logpoint debugger suggestions; Markdown table formatting / pipe warning                                                                   | Ours                                   | **Fixed where it is an inspection defect.** Gradle type qualifier removed; Markdown tables reformatted and the table-breaking literal pipe removed. `println` entries are debugger suggestions for intentional Gradle console output, not correctness warnings, so output remains unchanged.                                                                                                                                                                                                      |
 | 23  | DevKit: prefer `ComboBox`/`JBScrollPane`; safe `HtmlChunk` tooltips; `VirtualFile.equals`; DPI-aware insets; Eel optimization suggestions                                                     | Ours                                   | **Fixed or narrowly justified.** JetBrains UI classes, safe tooltip API, equality, and `JBUI` insets/sizes are used. Local-only filesystem operations keep `java.nio.file.Files`; adopting Eel would replace a local stable API with Platform 262 experimental Eel API, so only the exact local-only methods/tests carry `UseOptimizedEelFunctions` suppressions with rationale.                                                                                                                  |
 | 24  | Plugin descriptor/live-template i18n plus action-description capitalization                                                                                                                   | Ours                                   | **Fixed.** Added `messages.PapyrusBundle`; configurables/actions use resource keys; all 20 Live Template descriptions use `key` + `resource-bundle`; action description capitalization corrected. Unit contracts verify the localized descriptor surface.                                                                                                                                                                                                                                         |
+
+
+## 0.2.151 API/inspection note
+
+The Ctrl+B follow-up stays on public Platform API: `DumbAwareAction`, `AnAction.registerCustomShortcutSet(...)`, `ActionManager.getAction(...)`, and `ActionManager.tryToExecute(...)`. The nested platform action is invoked with no original `InputEvent`, no keyboard-specific action place, and `now=false`; Platform 262 therefore uses the asynchronous execution branch rather than `runUpdateSessionForInputEvent(...)`. No new suppression or internal API dependency is added.
+
+## 0.2.150 API/inspection note
+
+The Ctrl+B production fix intentionally avoids `ActionUpdaterInterceptor`, `ActionRemoteBehavior`, `ProxyShortcutSet`, and other `@ApiStatus.Internal` / experimental APIs discovered during investigation. The implementation uses public `EditorFactoryListener`, `AnAction.registerCustomShortcutSet`, `IdeActions.ACTION_GOTO_DECLARATION`, and `ActionUtil.wrap` APIs. No inspection suppression is added for the fix.
 
 ## Policy resulting from this audit
 

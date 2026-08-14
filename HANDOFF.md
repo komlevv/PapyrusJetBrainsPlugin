@@ -1,10 +1,12 @@
-# Papyrus JetBrains Plugin handoff — 0.2.147 source / 0.2.146 green baseline
+# Papyrus JetBrains Plugin handoff — 0.2.151 source / 0.2.146 full-green baseline
 
 > Documentation boundary: `README.md` is the public/user-facing GitHub landing page. Version-by-version history, regression notes, test gates, inspection/lint details, local build paths, offline dependency layout, implementation notes, and other maintainer-only operational context belong here or in the dedicated living technical documents, not in `README.md`.
 
 0.2.146 is the current user-verified green baseline. Full Windows gate: **59/59 UNIT + 16/16 PAPYRUS-LANG + 39/39 REAL CLION UI = 114/114**.
 
-0.2.147 is the current source. It fixes the IntelliJ Platform 262 background-thread read-access assertion in script-status polling by using `FileDocumentManager.getCachedDocument()` for modification-stamp checks instead of the read-lock-requiring `getDocument()`. 0.2.147 is not yet a verified green baseline.
+0.2.147 fixed the IntelliJ Platform 262 background-thread read-access assertion in script-status polling by using `FileDocumentManager.getCachedDocument()` for modification-stamp checks instead of the read-lock-requiring `getDocument()`. The user reported the 0.2.147 build green; the full 59/16/39 regression gate has not been re-run for that version.
+
+0.2.148 is the clean base line that removes the machine-specific default `Y:\dev\PapyrusTest\IntellijPapyrus.ini` from Papyrus settings. 0.2.150 added the first Papyrus-scoped editor-local `GotoDeclaration` shortcut route; the user's Windows gate proved that it outranks the Rider backend composite action but its `ActionUtil.wrap(...)` delegate still does not navigate. 0.2.151 changes only the local execution step to public `ActionManager.tryToExecute(...)` with the original keyboard event removed. There is no settings migration and no workspace-root experiment in this line.
 
 0.2.145 performed the high-confidence code-quality cleanup; 0.2.146 only fixes the checked `URISyntaxException` compile regression in the server-integration guardian classpath conversion. Production behavior, write boundaries, process containment, and debugger hold are unchanged.
 
@@ -12,7 +14,7 @@ Target runtime/test IDE: **CLion 2026.2.x / IntelliJ Platform 262**. Verified in
 
 ## Current source state
 
-- Current source version: **0.2.147**.
+- Current source version: **0.2.151**.
 - 0.2.126 is the all-24 inspection cleanup. It does not add a Papyrus feature; it refactors plugin-owned warnings, updates deprecated/DevKit APIs, adds descriptor/live-template i18n, and documents every submitted screenshot in `INSPECTION_AUDIT.md`. Vendor/generated artifacts remain untouched.
 - Authoritative user-reported Windows gate: **0.2.146 — 59/59 UNIT, 16/16 PAPYRUS-LANG, 39/39 REAL CLION UI = 114/114**.
 - Hardened semantic **Refactor | Rename** is VERIFIED at the 0.2.112 baseline.
@@ -162,6 +164,64 @@ Current full-green counts: **59 U + 16 S + 39 I = 114 tests** on 0.2.146.
 - `Papyrus Projects` owns `Projects` and bounded in-memory `Output` tabs.
 - Bundled VSIX and host runtime may be extracted/staged only inside IDE system cache; source vendor/game inputs remain read-only.
 
+## Practical PPJ/import and Go To Definition investigation — 2026-08-14
+
+### PPJ/import result
+
+The immediate HPL project-discovery failure is locally explained. Do **not** patch upstream for it now.
+
+Confirmed from the real CLion project:
+
+- `X:\PapyrusBuild\HPL` is correctly discovered when its PPJ contains `./src` as the local `<Import>` / `<Folder>`.
+- The external imports that made the project disappear contained an incorrect path. With a correct path, this is no longer evidence of a JetBrains workspace/discovery defect.
+- The user deliberately deferred a robustness pass for malformed/unresolvable imports. A typo in one `<Import>` should eventually produce a useful error and should not leave the whole project unusable, but this is not the current task.
+
+Confirmed upstream fragility to preserve for that later robustness pass:
+
+- `papyrus-lang v3.3.0-prerelease.1` `SourceInclude.Path` derives its display name through `File.GetAttributes(path)`. An inaccessible/malformed source path can therefore throw while building project options instead of degrading to an empty/unresolved include. The same code is still present on upstream `develop`.
+- `WorkspaceManager.Handle(DidChangeWatchedFilesParams)` in the tagged server has a duplicated `.psc` condition and does not reload a changed `.ppj` through the watched-file path. PPJ save has a separate reload handler, but recovery after a failed project load is still fragile. The same code is still present on upstream `develop`.
+- These upstream issues are **deferred**. Do not vendor-patch them while investigating Go To Definition.
+
+### Go To Declaration / `textDocument/definition` investigation
+
+Real-user symptoms:
+
+- `Quest.psc` is visibly loaded in Papyrus Projects from the Skyrim source import; a second `Quest.psc` may also exist in `merged_for_compile`.
+- `Ctrl+B` on `Quest` does not navigate. The user reports the same problem for other imported definitions and also reports that local Ctrl+B can fail, so the investigation must not assume that only external VFS targets are affected.
+- No more manual user-side probes should be requested for this issue. Reproduce through raw-server and real-CLion automated tests.
+
+Important API facts verified before adding tests:
+
+- LSP `textDocument/definition` can be advertised statically through `ServerCapabilities.definitionProvider` or dynamically through `client/registerCapability` when the client advertises `DefinitionClientCapabilities.dynamicRegistration`.
+- IntelliJ Platform 262 advertises `DefinitionCapabilities` with `linkSupport=true`, but its default capability construction does **not** set `definition.dynamicRegistration=true`.
+- IntelliJ Platform 262 `LspClientImpl.supportsGotoDefinition()` checks only the static `initializeResult.capabilities.definitionProvider`. In contrast, `supportsFindReferences()` falls back to the dynamically registered References capability.
+- IntelliJ Platform 262 does track dynamic `textDocument/definition` registrations internally, but that dynamic table is not consulted by `supportsGotoDefinition()`. `LspImplicitReferenceProvider` calls `supportsGotoDefinition()` before sending `textDocument/definition`, so a missing/false static provider can suppress Ctrl+B before any request reaches papyrus-lang.
+- The plugin already has a References compatibility shim for a related static-false/dynamic-registration mismatch. There is currently no Definition-specific shim. Do **not** add one until tests prove it is needed.
+- `papyrus-lang v3.3.0-prerelease.1` uses OmniSharp.Extensions LanguageServer/LanguageProtocol 0.10.0. Its `DefinitionHandler.SetCapability()` sets `DynamicRegistration=true`, and the handler itself supports type identifiers through the normal symbol/type resolution path.
+- Existing raw tests were not production-equivalent for this capability question: `RawLspClient.initialize()` advertised `definition.dynamicRegistration=true`. Existing real-CLion navigation coverage verified one local member call (`Target.SharedProbe()`), not script-type navigation and not vanilla/import navigation.
+
+Test-only investigation added on top of 0.2.148, with production LSP behavior intentionally unchanged:
+
+1. `RawLspClient.CapabilityProfile.JETBRAINS_262` mirrors the relevant production Definition capability by advertising `definition.linkSupport=true` without dynamic registration.
+2. A raw capability-contract test requires a static `definitionProvider` under that client profile and reports an unexpected dynamic Definition registration.
+3. Raw `textDocument/definition` tests cover:
+   - local Papyrus script type -> local `.psc`;
+   - PPJ imported script type -> imported `.psc`;
+   - vanilla `Quest` -> `Data/Source/Scripts/Quest.psc`.
+4. Real CLion UI tests cover:
+   - actual `initializeResult.definitionProvider` state exposed through test-only support;
+   - Ctrl+B from the local `FeatureTarget` type;
+   - Ctrl+B from vanilla `Quest`.
+5. The existing real-CLion `Target.SharedProbe()` navigation test remains as the local-member reference control.
+
+Interpretation of the new tests:
+
+- If raw Definition semantics pass but real CLion reports `definitionProvider=false/null`, the failure is capability gating before the request is sent.
+- If the static provider is enabled and raw Definition semantics pass but UI navigation fails, inspect JetBrains request/Location handling next.
+- If a raw local/import/Quest Definition test fails, investigate papyrus-lang semantic/project binding for that reference kind before changing the JetBrains adapter.
+
+Do not implement a Definition compatibility workaround until this matrix has been run on the real Windows gate.
+
 ## Current user-visible actions
 
 Registered:
@@ -189,7 +249,7 @@ Default source/build paths are local/offline and intentionally machine-specific 
 - vendor VSIX input: `<project>/vendor/papyrus-lang/v3.3.0-prerelease.1/papyrus-lang-vscode.vsix`;
 - offline test JARs: `<project>/third_party/papyrus-test-deps/`;
 - Skyrim SE/AE / Creation Kit: `X:/SteamLibrary/steamapps/common/Skyrim Special Edition`;
-- test INI: `Y:/dev/PapyrusTest/IntellijPapyrus.ini`.
+- test INI: no machine-specific path is a product default; local test configuration must supply the environment-specific Creation Kit INI through the existing test setup.
 
 The project is not currently documented as Marketplace/reproducible-CI ready.
 
@@ -214,3 +274,53 @@ gradlew.bat test
 - Source of truth report remains `build/papyrus-test-report.txt`.
 
 - CLion LSP compatibility: `plugin.xml` declares both `com.intellij.modules.lsp` and `com.intellij.modules.ultimate`.
+
+
+## Ctrl+B shortcut dispatch investigation (2026-08-14)
+
+New real-world symptom: invoking **Go to Declaration or Usages** from the editor context menu works, while pressing **Ctrl+B** does not, even though the menu displays Ctrl+B for the same action. This means direct `GotoDeclaration` action execution is not sufficient coverage for the reported failure.
+
+JetBrains Platform 262 default keymap binds `Ctrl+B` to action id `GotoDeclaration`. `GotoDeclarationAction` uses the same `GotoDeclarationOrUsageHandler2` for the action itself, but its `update()` path depends on the input event, action place, editor/data context, and focus. JetBrains source also contains TRACE-only diagnostics specifically for cases where `GotoDeclarationAction` is intermittently disabled.
+
+The UI suite previously called `invokeAction("GotoDeclaration", ...)`, which bypasses keyboard shortcut dispatch and therefore reproduces the working context-menu/direct-action path rather than the failing Ctrl+B path.
+
+Added UI regression coverage that sends the **actual active-keymap shortcut through `java.awt.Robot`** using the existing `invokeShortcut()` helper:
+
+- Ctrl+B on a local member reference (`SharedProbe`)
+- Ctrl+B on a local script type (`FeatureTarget`)
+- Ctrl+B on the imported vanilla type (`Quest`)
+
+Also added `PapyrusUiTestSupport.activeShortcutBindings()` so failures report the active keymap and every action id bound to the exact shortcut. Production behavior is unchanged.
+
+
+### Ctrl+B shortcut dispatch root cause and 0.2.150 fix — 2026-08-14
+
+The real CLion UI Robot tests reproduced the user-visible shortcut-only failure. Direct invocation of the platform `GotoDeclaration` action and the context-menu **Go to Declaration or Usages** path work, while physical Ctrl+B does not. The three physical shortcut tests fail consistently for a local member, a local script type, and vanilla `Quest`; raw `papyrus-lang` Definition tests remain green.
+
+The shortcut dispatch trace localizes the failure above the Papyrus LSP layer:
+
+- the editor owns focus and receives Ctrl+B;
+- the active keymap resolves the shortcut and includes action ID `GotoDeclaration`;
+- instead of performing `GotoDeclaration`, CLion performs `com.jetbrains.rider.actions.RiderActionUpdateInterceptor$RiderBackendCompositeAction`, which reports `Performed` without navigating;
+- therefore this issue is not evidence of a PPJ/import, `Quest`, semantic Definition, or external-VFS failure.
+
+API review changed the first proposed fix. A normal `ActionPromoter` is a public platform API, but Platform 262 calls `ActionUpdaterInterceptor.runUpdateSessionForInputEvent()` before falling back to ordinary promoter rearrangement. Because the observed CLion/Rider failure is produced by that interceptor, a promoter-only patch is not a reliable fix and is not present in 0.2.150. The Rider interceptor and remote-action APIs are internal and are not used by the plugin.
+
+0.2.150 uses the platform's public editor-local shortcut mechanism and follows JetBrains' own wrapper pattern:
+
+- `PapyrusEditorShortcutInstaller` subscribes through public `com.intellij.editorFactoryListener` / `EditorFactoryListener`;
+- only `.psc` editors receive a local action;
+- `ActionUtil.wrap(platformAction)` creates the editor-local wrapper; no plugin-owned Go To Declaration action is registered globally;
+- the installer reuses `ActionManager.getAction(IdeActions.ACTION_GOTO_DECLARATION).getShortcutSet()`, so no Ctrl+B literal or global keymap mutation is introduced;
+- public `AnAction.registerCustomShortcutSet(...)` attaches that shortcut to the editor content component; JetBrains documents that such an action does not need global registration;
+- the local action re-checks `.psc`, is `DumbAware` like the platform declaration action, and delegates with public `ActionWrapperUtil.actionPerformed(...)`, which `AnAction` documentation recommends for action-to-action delegation;
+- `EditorFactoryListener.editorReleased(...)` explicitly removes the local shortcut with public `AnAction.unregisterCustomShortcutSet(...)`; the action reference is stored in the editor user data only for that lifecycle.
+
+The existing direct-action and raw LSP tests remain controls. The three physical Ctrl+B real-CLion tests remain the acceptance gate. 0.2.150 must not be called green until the user runs the Windows gate and all three pass.
+
+
+### 0.2.150 Windows result and 0.2.151 follow-up — 2026-08-14
+
+The user ran the full 0.2.150 gate: **59/59 UNIT PASS**, **20/20 PAPYRUS-LANG PASS**, **42/45 REAL CLION UI PASS**. The only failures are the three physical Ctrl+B Definition scenarios. Their dispatch traces are decisive: the editor has focus, the shortcut is resolved, and the action selected/performed is now `com.intellij.openapi.actionSystem.AnActionWrapper` rather than Rider's backend composite action, but the selected editor never changes. Therefore 0.2.150 fixed shortcut arbitration priority but not the final declaration invocation.
+
+0.2.151 keeps the same editor-local shortcut registration and platform-derived `ShortcutSet`, but replaces `ActionUtil.wrap(platformAction)` with a small local `DumbAwareAction`. Once physical Ctrl+B selects that local action, it calls public `ActionManager.tryToExecute(platformAction, null, editorComponent, null, false)`. The `null` input event plus `now=false` is intentional: Platform 262 waits for focus to settle, rebuilds the editor-component `DataContext`, updates the exact supplied action through the non-input-event branch, and performs it with `inputEvent=null`. This is the closest public-API equivalent to the already-green direct `GotoDeclaration` control while staying outside the physical Ctrl+B arbitration path. The three physical Ctrl+B tests remain the acceptance gate.

@@ -1,6 +1,7 @@
 > **Status: ALPHA** — active development; behavior and packaging may still change before the first stable release.
 > **Target IDE:** CLion **2026.2.x** on IntelliJ Platform **262**. Verified target: **CLion 2026.2.1 / CL-262.9437.136**.
 > **Platform:** Windows.
+> **Current source:** **0.2.151**. The first editor-local Ctrl+B route in 0.2.150 reached the plugin wrapper but did not navigate; 0.2.151 keeps the Papyrus-local shortcut interception and re-enters the already-working platform `GotoDeclaration` action without the original keyboard event. The Windows real-CLion gate is pending.
 
 # Papyrus Language Support for JetBrains CLion 
 
@@ -22,6 +23,7 @@ This is a CLion port of `joelday/papyrus-lang`. Plugin uses `v3.3.0-prerelease.1
 - completion, including member completion after `.`;
 - diagnostics;
 - Go to Declaration / Definition;
+- Papyrus-local Go to Declaration shortcut routing for CLion/Rider keyboard arbitration;
 - Find Usages;
 - Quick Definition;
 - Quick Documentation / hover;

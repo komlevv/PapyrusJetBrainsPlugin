@@ -1,7 +1,7 @@
 <idea-plugin>
     <id>dev.papyrus.intellij-papyrus</id>
     <name>Papyrus Language</name>
-    <version>0.2.147</version>
+    <version>0.2.151</version>
 
     <vendor>Local</vendor>
     <resource-bundle>messages.PapyrusBundle</resource-bundle>
@@ -49,6 +49,9 @@
         <renameHandler
                 implementation="dev.papyrus.jetbrains.lsp.PapyrusRenameHandler"
                 order="first"/>
+
+        <editorFactoryListener
+                implementation="dev.papyrus.jetbrains.actions.PapyrusEditorShortcutInstaller"/>
 
         <textmate.bundleProvider
                 implementation="dev.papyrus.jetbrains.textmate.PapyrusTextMateBundleProvider"/>

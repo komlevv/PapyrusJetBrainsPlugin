@@ -4,8 +4,16 @@ import com.intellij.codeInsight.hint.HintManager;
 import com.intellij.codeInsight.lookup.LookupManager;
 import com.intellij.ide.IdeEventQueue;
 import com.intellij.openapi.actionSystem.ActionManager;
+import com.intellij.openapi.actionSystem.AnActionEvent;
+import com.intellij.openapi.actionSystem.AnActionResult;
+import com.intellij.openapi.actionSystem.DataContext;
 import com.intellij.openapi.actionSystem.AnAction;
+import com.intellij.openapi.actionSystem.KeyboardShortcut;
+import com.intellij.openapi.actionSystem.Shortcut;
+import com.intellij.openapi.actionSystem.ex.AnActionListener;
 import com.intellij.openapi.fileEditor.FileDocumentManager;
+import com.intellij.openapi.keymap.Keymap;
+import com.intellij.openapi.keymap.KeymapManager;
 import com.intellij.openapi.fileEditor.FileEditorManager;
 import com.intellij.openapi.vfs.LocalFileSystem;
 import com.intellij.openapi.vfs.VirtualFile;
@@ -26,6 +34,7 @@ import com.intellij.task.ProjectTaskRunner;
 import com.intellij.openapi.wm.ToolWindow;
 import com.intellij.openapi.wm.ToolWindowManager;
 import com.intellij.openapi.wm.WindowManager;
+import com.intellij.util.messages.MessageBusConnection;
 import com.intellij.ui.content.Content;
 import com.intellij.ui.content.ContentManager;
 import com.intellij.ui.treeStructure.Tree;
@@ -69,7 +78,12 @@ import java.awt.Container;
 import java.awt.Dialog;
 import java.awt.Rectangle;
 import java.awt.Window;
+import java.awt.AWTEvent;
+import java.awt.KeyboardFocusManager;
+import java.awt.Toolkit;
 import java.awt.event.InputEvent;
+import java.awt.event.KeyEvent;
+import java.awt.event.AWTEventListener;
 import java.awt.event.MouseEvent;
 import java.io.IOException;
 import java.nio.charset.StandardCharsets;
@@ -81,6 +95,10 @@ import java.util.concurrent.atomic.AtomicReference;
 
 public final class PapyrusUiTestSupport {
     private static final String ENABLE_PROPERTY = "papyrus.ui.integration.test";
+    private static final Object SHORTCUT_TRACE_LOCK = new Object();
+    private static final StringBuilder SHORTCUT_TRACE = new StringBuilder();
+    private static MessageBusConnection shortcutTraceConnection;
+    private static AWTEventListener shortcutTraceAwtListener;
 
     private PapyrusUiTestSupport() {
     }
@@ -349,6 +367,162 @@ public final class PapyrusUiTestSupport {
                 .stream()
                 .map(client -> client.getState().name())
                 .toList());
+    }
+
+    public static String papyrusDefinitionProviderStates(Project project) {
+        requireEnabled();
+        return String.join(", ", LspClientManager.getInstance(project)
+                .getClients(PapyrusLspIntegrationProvider.class)
+                .stream()
+                .map(client -> {
+                    var initializeResult = client.getInitializeResult();
+                    if (initializeResult == null || initializeResult.getCapabilities() == null) {
+                        return "uninitialized";
+                    }
+                    var provider = initializeResult.getCapabilities().getDefinitionProvider();
+                    if (provider == null) {
+                        return "null";
+                    }
+                    if (provider.isLeft()) {
+                        return "boolean:" + provider.getLeft();
+                    }
+                    return "options";
+                })
+                .toList());
+    }
+
+    public static String activeShortcutBindings(String actionId) {
+        requireEnabled();
+        Keymap keymap = KeymapManager.getInstance().getActiveKeymap();
+        List<String> parts = new ArrayList<>();
+        for (Shortcut shortcut : keymap.getShortcuts(actionId)) {
+            List<String> exactActionIds = keymap.getActionIdList(shortcut);
+            parts.add(shortcut + " -> " + String.join(",", exactActionIds));
+        }
+        return "keymap=" + keymap.getName() + "; " + String.join("; ", parts);
+    }
+
+    public static void startShortcutDispatchTrace() {
+        requireEnabled();
+        onEdt(() -> {
+            stopShortcutDispatchTraceInternal();
+            synchronized (SHORTCUT_TRACE_LOCK) {
+                SHORTCUT_TRACE.setLength(0);
+            }
+
+            shortcutTraceAwtListener = event -> {
+                if (!(event instanceof KeyEvent keyEvent)) {
+                    return;
+                }
+                String kind = switch (keyEvent.getID()) {
+                    case KeyEvent.KEY_PRESSED -> "KEY_PRESSED";
+                    case KeyEvent.KEY_RELEASED -> "KEY_RELEASED";
+                    case KeyEvent.KEY_TYPED -> "KEY_TYPED";
+                    default -> "KEY_" + keyEvent.getID();
+                };
+                Component focusOwner = KeyboardFocusManager.getCurrentKeyboardFocusManager().getFocusOwner();
+                appendShortcutTrace(
+                        kind
+                                + " code=" + keyEvent.getKeyCode()
+                                + " char=" + (int) keyEvent.getKeyChar()
+                                + " modifiersEx=" + keyEvent.getModifiersEx()
+                                + " consumed=" + keyEvent.isConsumed()
+                                + " source=" + keyEvent.getSource().getClass().getName()
+                                + " focusOwner=" + (focusOwner == null ? "null" : focusOwner.getClass().getName())
+                );
+            };
+            Toolkit.getDefaultToolkit().addAWTEventListener(shortcutTraceAwtListener, AWTEvent.KEY_EVENT_MASK);
+
+            shortcutTraceConnection = ApplicationManager.getApplication().getMessageBus().connect();
+            shortcutTraceConnection.subscribe(AnActionListener.TOPIC, new AnActionListener() {
+                @Override
+                public void beforeShortcutTriggered(
+                        Shortcut shortcut,
+                        List<AnAction> actions,
+                        DataContext dataContext
+                ) {
+                    List<String> actionIds = actions.stream()
+                            .map(action -> {
+                                String id = ActionManager.getInstance().getId(action);
+                                return id == null ? action.getClass().getName() : id;
+                            })
+                            .toList();
+                    appendShortcutTrace("SHORTCUT " + shortcut + " actions=" + String.join(",", actionIds));
+                }
+
+                @Override
+                public void beforeActionPerformed(AnAction action, AnActionEvent event) {
+                    String id = ActionManager.getInstance().getId(action);
+                    appendShortcutTrace(
+                            "BEFORE_ACTION id=" + (id == null ? action.getClass().getName() : id)
+                                    + " place=" + event.getPlace()
+                                    + " enabled=" + event.getPresentation().isEnabled()
+                                    + " input=" + describeInputEvent(event.getInputEvent())
+                    );
+                }
+
+                @Override
+                public void afterActionPerformed(AnAction action, AnActionEvent event, AnActionResult result) {
+                    String id = ActionManager.getInstance().getId(action);
+                    appendShortcutTrace(
+                            "AFTER_ACTION id=" + (id == null ? action.getClass().getName() : id)
+                                    + " place=" + event.getPlace()
+                                    + " result=" + result
+                    );
+                }
+            });
+            return null;
+        });
+    }
+
+    public static String shortcutDispatchTraceSnapshot() {
+        requireEnabled();
+        synchronized (SHORTCUT_TRACE_LOCK) {
+            return SHORTCUT_TRACE.toString();
+        }
+    }
+
+    public static String stopShortcutDispatchTrace() {
+        requireEnabled();
+        return onEdt(() -> {
+            stopShortcutDispatchTraceInternal();
+            synchronized (SHORTCUT_TRACE_LOCK) {
+                return SHORTCUT_TRACE.toString();
+            }
+        });
+    }
+
+    private static void stopShortcutDispatchTraceInternal() {
+        if (shortcutTraceAwtListener != null) {
+            Toolkit.getDefaultToolkit().removeAWTEventListener(shortcutTraceAwtListener);
+            shortcutTraceAwtListener = null;
+        }
+        if (shortcutTraceConnection != null) {
+            shortcutTraceConnection.disconnect();
+            shortcutTraceConnection = null;
+        }
+    }
+
+    private static void appendShortcutTrace(String line) {
+        synchronized (SHORTCUT_TRACE_LOCK) {
+            if (!SHORTCUT_TRACE.isEmpty()) {
+                SHORTCUT_TRACE.append(" | ");
+            }
+            SHORTCUT_TRACE.append(line);
+        }
+    }
+
+    private static String describeInputEvent(InputEvent event) {
+        if (event == null) {
+            return "null";
+        }
+        if (event instanceof KeyEvent keyEvent) {
+            return "KeyEvent[id=" + keyEvent.getID()
+                    + ",code=" + keyEvent.getKeyCode()
+                    + ",modifiersEx=" + keyEvent.getModifiersEx()
+                    + ",consumed=" + keyEvent.isConsumed() + "]";
+        }
+        return event.getClass().getName();
     }
 
     public static boolean isProjectContentFile(Project project, String filePath) {

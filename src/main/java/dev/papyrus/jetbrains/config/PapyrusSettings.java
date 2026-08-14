@@ -17,7 +17,7 @@ public final class PapyrusSettings implements PersistentStateComponent<PapyrusSe
 
     public static final String DEFAULT_CREATION_KIT_INSTALL_PATH =
             "X:\\SteamLibrary\\steamapps\\common\\Skyrim Special Edition";
-    public static final String DEFAULT_INI_PATHS = "Y:\\dev\\PapyrusTest\\IntellijPapyrus.ini";
+    public static final String DEFAULT_INI_PATHS = "";
 
     /** Public mutable bean fields are required by PersistentStateComponent XML serialization. */
     public static final class SettingsState {

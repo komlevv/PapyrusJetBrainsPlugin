@@ -174,6 +174,139 @@ internal class PapyrusEditorFeaturesUiTest {
     }
 
     @Test
+    @Order(40)
+    fun realClionClientHasStaticDefinitionProvider() {
+        val states = ide.utility<PapyrusUiTestSupportRemote>().papyrusDefinitionProviderStates(ide.project)
+        assertTrue(states.isNotBlank(), "No Papyrus LSP client definition capability state was reported")
+        val providers = states.split(", ")
+        assertTrue(
+            providers.all { it == "boolean:true" || it == "options" },
+            "CLion Go To Declaration requires a static definitionProvider; actual Papyrus client states: $states",
+        )
+    }
+
+    @Test
+    @Order(41)
+    fun gotoDeclarationNavigatesFromLocalScriptType() {
+        val editor = open(fixture.caller)
+        val text = editor.getDocument().getText()
+        val usage = text.indexOf("FeatureTarget")
+        assertTrue(usage >= 0)
+        focusEditor(editor, usage + 2)
+        invokeAction("GotoDeclaration", editor.getContentComponent())
+        val expected = fixture.target.toAbsolutePath().normalize().toString().replace('\\', '/')
+        ide.waitFor("Goto Declaration from local script type to FeatureTarget.psc", NORMAL) {
+            fileEditorManager().getSelectedTextEditor()?.getVirtualFile()?.getPath()?.replace('\\', '/')
+                ?.equals(expected, ignoreCase = true) == true
+        }
+    }
+
+    @Test
+    @Order(42)
+    fun gotoDeclarationNavigatesFromVanillaQuestType() {
+        val quest = UiTestEnvironment.creationKitHome().resolve("Data/Source/Scripts/Quest.psc").toRealPath()
+        assertTrue(Files.isRegularFile(quest), "Missing vanilla Quest.psc test dependency: $quest")
+        val editor = open(fixture.caller)
+        val text = editor.getDocument().getText()
+        val usage = text.indexOf("Quest")
+        assertTrue(usage >= 0)
+        focusEditor(editor, usage + 2)
+        invokeAction("GotoDeclaration", editor.getContentComponent())
+        val expected = quest.toString().replace('\\', '/')
+        ide.waitFor("Goto Declaration from vanilla Quest type to Quest.psc", NORMAL) {
+            fileEditorManager().getSelectedTextEditor()?.getVirtualFile()?.getPath()?.replace('\\', '/')
+                ?.equals(expected, ignoreCase = true) == true
+        }
+    }
+
+    @Test
+    @Order(43)
+    fun gotoDeclarationShortcutNavigatesToPapyrusDefinition() {
+        val editor = open(fixture.caller)
+        val text = editor.getDocument().getText()
+        val usage = text.indexOf("SharedProbe")
+        assertTrue(usage >= 0)
+        focusEditor(editor, usage + 2)
+        val support = ide.utility<PapyrusUiTestSupportRemote>()
+        val bindings = support.activeShortcutBindings("GotoDeclaration")
+        assertTrue(bindings.contains("GotoDeclaration"), "GotoDeclaration is not bound in the active keymap: $bindings")
+        support.startShortcutDispatchTrace()
+        invokeShortcut("GotoDeclaration", editor.getContentComponent())
+        val expected = fixture.target.toAbsolutePath().normalize().toString().replace('\\', '/')
+        try {
+            ide.waitFor("Ctrl+B to FeatureTarget.psc", NORMAL) {
+                fileEditorManager().getSelectedTextEditor()?.getVirtualFile()?.getPath()?.replace('\\', '/')
+                    ?.equals(expected, ignoreCase = true) == true
+            }
+            support.stopShortcutDispatchTrace()
+        } catch (error: AssertionError) {
+            val trace = support.stopShortcutDispatchTrace()
+            throw AssertionError(
+                "Ctrl+B did not navigate to the local member definition. Active keymap: $bindings. Dispatch trace: $trace",
+                error,
+            )
+        }
+    }
+
+    @Test
+    @Order(44)
+    fun gotoDeclarationShortcutNavigatesFromLocalScriptType() {
+        val editor = open(fixture.caller)
+        val text = editor.getDocument().getText()
+        val usage = text.indexOf("FeatureTarget")
+        assertTrue(usage >= 0)
+        focusEditor(editor, usage + 2)
+        val support = ide.utility<PapyrusUiTestSupportRemote>()
+        val bindings = support.activeShortcutBindings("GotoDeclaration")
+        support.startShortcutDispatchTrace()
+        invokeShortcut("GotoDeclaration", editor.getContentComponent())
+        val expected = fixture.target.toAbsolutePath().normalize().toString().replace('\\', '/')
+        try {
+            ide.waitFor("Ctrl+B from local script type to FeatureTarget.psc", NORMAL) {
+                fileEditorManager().getSelectedTextEditor()?.getVirtualFile()?.getPath()?.replace('\\', '/')
+                    ?.equals(expected, ignoreCase = true) == true
+            }
+            support.stopShortcutDispatchTrace()
+        } catch (error: AssertionError) {
+            val trace = support.stopShortcutDispatchTrace()
+            throw AssertionError(
+                "Ctrl+B did not navigate from the local script type. Active keymap: $bindings. Dispatch trace: $trace",
+                error,
+            )
+        }
+    }
+
+    @Test
+    @Order(45)
+    fun gotoDeclarationShortcutNavigatesFromVanillaQuestType() {
+        val quest = UiTestEnvironment.creationKitHome().resolve("Data/Source/Scripts/Quest.psc").toRealPath()
+        assertTrue(Files.isRegularFile(quest), "Missing vanilla Quest.psc test dependency: $quest")
+        val editor = open(fixture.caller)
+        val text = editor.getDocument().getText()
+        val usage = text.indexOf("Quest")
+        assertTrue(usage >= 0)
+        focusEditor(editor, usage + 2)
+        val support = ide.utility<PapyrusUiTestSupportRemote>()
+        val bindings = support.activeShortcutBindings("GotoDeclaration")
+        support.startShortcutDispatchTrace()
+        invokeShortcut("GotoDeclaration", editor.getContentComponent())
+        val expected = quest.toString().replace('\\', '/')
+        try {
+            ide.waitFor("Ctrl+B from vanilla Quest type to Quest.psc", NORMAL) {
+                fileEditorManager().getSelectedTextEditor()?.getVirtualFile()?.getPath()?.replace('\\', '/')
+                    ?.equals(expected, ignoreCase = true) == true
+            }
+            support.stopShortcutDispatchTrace()
+        } catch (error: AssertionError) {
+            val trace = support.stopShortcutDispatchTrace()
+            throw AssertionError(
+                "Ctrl+B did not navigate from the vanilla Quest type. Active keymap: $bindings. Dispatch trace: $trace",
+                error,
+            )
+        }
+    }
+
+    @Test
     @Order(5)
     fun foldingCreatesPapyrusFoldRegions() {
         val editor = open(fixture.target)
@@ -2105,6 +2238,11 @@ internal class PapyrusEditorFeaturesUiTest {
         fun selectedRunConfigurationTypeId(project: Project): String
         fun papyrusLspClientCount(project: Project): Int
         fun papyrusLspClientStates(project: Project): String
+        fun papyrusDefinitionProviderStates(project: Project): String
+        fun activeShortcutBindings(actionId: String): String
+        fun startShortcutDispatchTrace()
+        fun shortcutDispatchTraceSnapshot(): String
+        fun stopShortcutDispatchTrace(): String
         fun isProjectContentFile(project: Project, filePath: String): Boolean
         fun clearPapyrusLspOutputDiagnostic()
         fun papyrusLspOutputDiagnostic(project: Project): String

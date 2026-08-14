@@ -4,7 +4,7 @@ This document contains only **remaining decisions/work**. Completed per-version 
 
 ## Current baseline
 
-- Current source: **0.2.147**. 0.2.147 fixes the background script-status `FileDocumentManager.getDocument()` read-access assertion by using the non-loading cached-document lookup for modification stamps.
+- Current source: **0.2.151**. 0.2.150 proved that a Papyrus-local custom shortcut outranks the Rider backend composite action but its plain `ActionUtil.wrap(GotoDeclaration)` delegate still did not navigate. 0.2.151 keeps that local shortcut priority and re-runs the registered platform `GotoDeclaration` action through public `ActionManager.tryToExecute(...)` asynchronously with no original `KeyEvent`. The `now=false` path avoids `runUpdateSessionForInputEvent(...)`, rebuilds the `DataContext` from the editor component, and then performs the registered platform action.
 - 0.2.126: plugin-owned cleanup for all 24 submitted CLion inspection screenshots; no intended Papyrus feature change.
 - Current authoritative gate: user-verified **59 unit / 16 exact-upstream server / 39 real-CLion = 114/114** on **0.2.146**.
 - Hardened semantic Papyrus Rename is VERIFIED at the 0.2.112 baseline.
@@ -18,6 +18,16 @@ This document contains only **remaining decisions/work**. Completed per-version 
 - The 0.2.115 gate is fully green and verifies the validated PPJ snapshot, real bundled Pyro, real Creation Kit compiler, project-local output, and source immutability.
 
 The current safe/read-only SSE/AE feature set is in good parity shape. See `PORT_STATUS.md` for the detailed matrix.
+
+## 0.2.151 acceptance gate
+
+The production fix is implemented; the remaining work is validation, not another navigation redesign. Run the full Windows gate and require all three physical-shortcut scenarios to pass:
+
+- local member reference -> local declaration;
+- local script type -> local `.psc`;
+- vanilla/imported `Quest` -> `Quest.psc`.
+
+If those pass together with the existing 59 unit and 20 raw-server tests, close the Ctrl+B incident. Do not replace the fix with `ActionPromoter`, `ActionUpdaterInterceptor`, or remote-action internal APIs: Platform 262 runs the Rider action-update interceptor before ordinary action promoters, and the chosen production path intentionally uses only public editor/action APIs.
 
 ## 1. Upstream parity decisions already made
 

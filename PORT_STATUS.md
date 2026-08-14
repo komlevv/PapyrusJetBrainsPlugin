@@ -1,12 +1,12 @@
-# Papyrus JetBrains Plugin port status — 0.2.147 source
+# Papyrus JetBrains Plugin port status — 0.2.151 source
 
 Current status: **ALPHA**. Active compatibility target: **CLion 2026.2.x / IntelliJ Platform 262**; verified target: **CLion 2026.2.1 / CL-262.9437.136**.
 
-The current source is **0.2.147**. The latest authoritative Windows gate remains **0.2.146: 59/59 UNIT + 16/16 PAPYRUS-LANG + 39/39 REAL CLION UI = 114/114**. 0.2.147 fixes the background script-status read-access assertion on IntelliJ Platform 262; it has not yet replaced 0.2.146 as the verified baseline. Feature scope and safety boundaries are unchanged.
+The current source is **0.2.151**. The latest authoritative full-green Windows baseline remains **0.2.146: 59/59 UNIT + 16/16 PAPYRUS-LANG + 39/39 REAL CLION UI = 114/114**. The expanded 0.2.148 investigation gate is **59 UNIT + 20 PAPYRUS-LANG + 45 REAL CLION UI**; its three physical Ctrl+B scenarios intentionally reproduced the CLion/Rider shortcut-dispatch defect. The user's 0.2.150 gate kept 59/59 UNIT and 20/20 PAPYRUS-LANG green but failed exactly the three physical Ctrl+B scenarios because the editor-local `AnActionWrapper` was performed without navigation. 0.2.151 replaces only that wrapper execution strategy and is pending the next Windows gate.
 
 ## Baseline
 
-- Plugin source version: **0.2.147**.
+- Plugin source version: **0.2.151**.
 - 0.2.126 is the all-24 plugin-source inspection cleanup; expected runtime behavior is unchanged.
 - Authoritative Windows gate: user-verified **0.2.146 — 59/59 UNIT, 16/16 PAPYRUS-LANG, 39/39 REAL CLION UI = 114/114**.
 - Hardened LSP-semantic **Refactor | Rename** is VERIFIED at the 0.2.112 baseline.
@@ -17,6 +17,19 @@ The current source is **0.2.147**. The latest authoritative Windows gate remains
 - Active game scope: **Skyrim Special Edition / Anniversary Edition**.
 
 - 0.2.115 full gate verified the bundled-Pyro XML-declaration compatibility snapshot and the project-local write boundary end-to-end.
+
+
+## 0.2.151 Ctrl+B direct-action re-entry
+
+**Status: IMPLEMENTED, pending Windows acceptance gate.**
+
+0.2.150 successfully moved physical Ctrl+B ahead of Rider's backend composite action: the dispatch trace now shows the Papyrus editor-local wrapper being selected and performed. The same gate also proved that `ActionUtil.wrap(GotoDeclaration)` is not sufficient in this CLion/Rider shortcut context because no navigation follows. 0.2.151 keeps the editor-local custom shortcut, but its local `DumbAwareAction` calls public `ActionManager.tryToExecute(...)` on the registered platform `GotoDeclaration` action with a `null` input event, the editor content component as context, and no keyboard-specific action place. With `now=false`, Platform 262 waits for focus to settle, rebuilds the `DataContext` from the editor component, updates the exact supplied action without the input-event dispatcher, and performs it with `inputEvent=null`. This happens after keyboard shortcut arbitration has completed and does not replace the global keymap, hard-code Ctrl+B, invoke Rider internals, or change LSP Definition semantics.
+
+## 0.2.150 Ctrl+B shortcut routing
+
+**Status: IMPLEMENTED, pending Windows acceptance gate.**
+
+The language server and direct platform `GotoDeclaration` action are already covered independently. The remaining real-IDE defect was isolated to CLion/Rider keyboard shortcut arbitration: physical Ctrl+B selected a Rider backend composite action instead of the working platform declaration action. 0.2.150 attaches an editor-local `ActionUtil.wrap(GotoDeclaration)` wrapper through the public `EditorFactoryListener` / `AnAction.registerCustomShortcutSet` APIs. The wrapper reuses the platform `GotoDeclaration` shortcut set and preserves the platform action lifecycle instead of manually forwarding `actionPerformed`. No global keymap entry is replaced or hard-coded. The three physical shortcut scenarios (local member, local script type, vanilla `Quest`) are the acceptance gate.
 
 ## Status vocabulary
 
