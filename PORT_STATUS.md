@@ -1,12 +1,12 @@
-# Papyrus JetBrains Plugin port status — 0.2.146
+# Papyrus JetBrains Plugin port status — 0.2.147 source
 
 Current status: **ALPHA**. Active compatibility target: **CLion 2026.2.x / IntelliJ Platform 262**; verified target: **CLion 2026.2.1 / CL-262.9437.136**.
 
-The latest authoritative Windows gate is **0.2.146: 59/59 UNIT + 16/16 PAPYRUS-LANG + 39/39 REAL CLION UI = 114/114**. 0.2.145 changed code quality only; 0.2.146 fixes its checked-exception compile regression. Feature scope and safety boundaries are unchanged.
+The current source is **0.2.147**. The latest authoritative Windows gate remains **0.2.146: 59/59 UNIT + 16/16 PAPYRUS-LANG + 39/39 REAL CLION UI = 114/114**. 0.2.147 fixes the background script-status read-access assertion on IntelliJ Platform 262; it has not yet replaced 0.2.146 as the verified baseline. Feature scope and safety boundaries are unchanged.
 
 ## Baseline
 
-- Plugin source version: **0.2.146**.
+- Plugin source version: **0.2.147**.
 - 0.2.126 is the all-24 plugin-source inspection cleanup; expected runtime behavior is unchanged.
 - Authoritative Windows gate: user-verified **0.2.146 — 59/59 UNIT, 16/16 PAPYRUS-LANG, 39/39 REAL CLION UI = 114/114**.
 - Hardened LSP-semantic **Refactor | Rename** is VERIFIED at the 0.2.112 baseline.

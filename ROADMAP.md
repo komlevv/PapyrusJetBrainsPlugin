@@ -4,7 +4,7 @@ This document contains only **remaining decisions/work**. Completed per-version 
 
 ## Current baseline
 
-- Current source: **0.2.146**.
+- Current source: **0.2.147**. 0.2.147 fixes the background script-status `FileDocumentManager.getDocument()` read-access assertion by using the non-loading cached-document lookup for modification stamps.
 - 0.2.126: plugin-owned cleanup for all 24 submitted CLion inspection screenshots; no intended Papyrus feature change.
 - Current authoritative gate: user-verified **59 unit / 16 exact-upstream server / 39 real-CLion = 114/114** on **0.2.146**.
 - Hardened semantic Papyrus Rename is VERIFIED at the 0.2.112 baseline.

@@ -196,7 +196,9 @@ public final class PapyrusScriptStatusService {
     }
 
     private static long currentModificationStamp(@NotNull VirtualFile file) {
-        Document document = FileDocumentManager.getInstance().getDocument(file);
+        // This method is called from pooled threads. getDocument() requires a read lock,
+        // while the cached document is sufficient to observe any unsaved editor changes.
+        Document document = FileDocumentManager.getInstance().getCachedDocument(file);
         return document != null ? document.getModificationStamp() : file.getModificationStamp();
     }
 

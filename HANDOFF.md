@@ -1,8 +1,10 @@
-# Papyrus JetBrains Plugin handoff — 0.2.146 green baseline
+# Papyrus JetBrains Plugin handoff — 0.2.147 source / 0.2.146 green baseline
 
 > Documentation boundary: `README.md` is the public/user-facing GitHub landing page. Version-by-version history, regression notes, test gates, inspection/lint details, local build paths, offline dependency layout, implementation notes, and other maintainer-only operational context belong here or in the dedicated living technical documents, not in `README.md`.
 
 0.2.146 is the current user-verified green baseline. Full Windows gate: **59/59 UNIT + 16/16 PAPYRUS-LANG + 39/39 REAL CLION UI = 114/114**.
+
+0.2.147 is the current source. It fixes the IntelliJ Platform 262 background-thread read-access assertion in script-status polling by using `FileDocumentManager.getCachedDocument()` for modification-stamp checks instead of the read-lock-requiring `getDocument()`. 0.2.147 is not yet a verified green baseline.
 
 0.2.145 performed the high-confidence code-quality cleanup; 0.2.146 only fixes the checked `URISyntaxException` compile regression in the server-integration guardian classpath conversion. Production behavior, write boundaries, process containment, and debugger hold are unchanged.
 
@@ -10,7 +12,7 @@ Target runtime/test IDE: **CLion 2026.2.x / IntelliJ Platform 262**. Verified in
 
 ## Current source state
 
-- Current source version: **0.2.146**.
+- Current source version: **0.2.147**.
 - 0.2.126 is the all-24 inspection cleanup. It does not add a Papyrus feature; it refactors plugin-owned warnings, updates deprecated/DevKit APIs, adds descriptor/live-template i18n, and documents every submitted screenshot in `INSPECTION_AUDIT.md`. Vendor/generated artifacts remain untouched.
 - Authoritative user-reported Windows gate: **0.2.146 — 59/59 UNIT, 16/16 PAPYRUS-LANG, 39/39 REAL CLION UI = 114/114**.
 - Hardened semantic **Refactor | Rename** is VERIFIED at the 0.2.112 baseline.

@@ -1,6 +1,6 @@
 # CLion inspection audit — all 24 submitted screenshots
 
-> Current continuity note (0.2.146): the 0.2.145 high-confidence offline AST cleanup plus the 0.2.146 checked-exception correction are now user-verified by the full **114/114** Windows gate. This file remains the living disposition of IDE/static-analysis findings; obsolete per-version audit files have been removed.
+> Current continuity note (0.2.147 source / 0.2.146 verified): the 0.2.145 high-confidence offline AST cleanup plus the 0.2.146 checked-exception correction are user-verified by the full **114/114** Windows gate. 0.2.147 adds the script-status background-thread read-access fix and is pending the next Windows gate. This file remains the living disposition of IDE/static-analysis findings; obsolete per-version audit files have been removed.
 
 
 
