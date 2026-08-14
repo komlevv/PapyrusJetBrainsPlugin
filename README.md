@@ -1,7 +1,7 @@
 > **Status: ALPHA** — active development; behavior and packaging may still change before the first stable release.
 > **Target IDE:** CLion **2026.2.x** on IntelliJ Platform **262**. Verified target: **CLion 2026.2.1 / CL-262.9437.136**.
 > **Platform:** Windows.
-> **Current source:** **0.2.156**. 0.2.151 remains the user-confirmed working CLion/Rider Ctrl+B routing baseline. 0.2.154 moved local Papyrus imports to a source-only `Papyrus Imports` library, 0.2.155 made that source-only library visible under External Libraries, and 0.2.156 reuses the Papyrus Projects include labels for those roots while excluding project-local source/import overlap such as the canonical PPJ source folder that appears in both `<Imports>` and `<Folders>`.
+> **Current source:** **0.2.164**. 0.2.163 is the user-confirmed green baseline before this change. 0.2.164 gives the Projects Refresh control an explicit busy state: the button immediately becomes disabled and reads `Refreshing...` while validation/reload/synchronization is in progress, while the service-level duplicate-request guard remains authoritative.
 
 # Papyrus Language Support for JetBrains CLion 
 

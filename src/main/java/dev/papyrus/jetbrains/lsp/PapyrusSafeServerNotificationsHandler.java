@@ -20,6 +20,7 @@ import org.jetbrains.annotations.NotNull;
 
 import java.util.List;
 import java.util.concurrent.CompletableFuture;
+import java.util.function.Supplier;
 
 final class PapyrusSafeServerNotificationsHandler implements LspServerNotificationsHandler {
 
@@ -27,9 +28,18 @@ final class PapyrusSafeServerNotificationsHandler implements LspServerNotificati
             "Papyrus blocks unsolicited workspace/applyEdit requests from the language server.";
 
     private final LspServerNotificationsHandler delegate;
+    private final Supplier<List<WorkspaceFolder>> workspaceFoldersSupplier;
 
     PapyrusSafeServerNotificationsHandler(@NotNull LspServerNotificationsHandler delegate) {
+        this(delegate, null);
+    }
+
+    PapyrusSafeServerNotificationsHandler(
+            @NotNull LspServerNotificationsHandler delegate,
+            Supplier<List<WorkspaceFolder>> workspaceFoldersSupplier
+    ) {
         this.delegate = delegate;
+        this.workspaceFoldersSupplier = workspaceFoldersSupplier;
     }
 
     @Override
@@ -82,6 +92,9 @@ final class PapyrusSafeServerNotificationsHandler implements LspServerNotificati
 
     @Override
     public @NotNull CompletableFuture<List<WorkspaceFolder>> workspaceFolders() {
+        if (workspaceFoldersSupplier != null) {
+            return CompletableFuture.completedFuture(workspaceFoldersSupplier.get());
+        }
         return delegate.workspaceFolders();
     }
 

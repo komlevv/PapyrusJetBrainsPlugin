@@ -1,12 +1,23 @@
-# Papyrus JetBrains Plugin port status — 0.2.156 source
+# Papyrus JetBrains Plugin port status — 0.2.164 source
 
 Current status: **ALPHA**. Active compatibility target: **CLion 2026.2.x / IntelliJ Platform 262**; verified target: **CLion 2026.2.1 / CL-262.9437.136**.
 
-The current source is **0.2.156**. The latest authoritative full-green Windows baseline remains **0.2.146: 59/59 UNIT + 16/16 PAPYRUS-LANG + 39/39 REAL CLION UI = 114/114**. The expanded 0.2.148 investigation gate is **59 UNIT + 20 PAPYRUS-LANG + 45 REAL CLION UI**; its three physical Ctrl+B scenarios intentionally reproduced the CLion/Rider shortcut-dispatch defect. The user's 0.2.150 gate kept 59/59 UNIT and 20/20 PAPYRUS-LANG green but failed exactly the three physical Ctrl+B scenarios because the editor-local `AnActionWrapper` was performed without navigation. 0.2.151 replaced that wrapper execution strategy and the user has since confirmed the resulting Ctrl+B path works in real CLion. The diagnostic 0.2.152 removal of the interceptor failed; 0.2.153 retains 0.2.151 and targets imported-source LSP continuity.
+The current source is **0.2.164**. The latest user-confirmed green Windows baseline is **0.2.163: 75/75 UNIT + 20/20 PAPYRUS-LANG + 48/48 REAL CLION UI**. The expanded 0.2.148 investigation gate is **59 UNIT + 20 PAPYRUS-LANG + 45 REAL CLION UI**; its three physical Ctrl+B scenarios intentionally reproduced the CLion/Rider shortcut-dispatch defect. The user's 0.2.150 gate kept 59/59 UNIT and 20/20 PAPYRUS-LANG green but failed exactly the three physical Ctrl+B scenarios because the editor-local `AnActionWrapper` was performed without navigation. 0.2.151 replaced that wrapper execution strategy and the user has since confirmed the resulting Ctrl+B path works in real CLion. The diagnostic 0.2.152 removal of the interceptor failed; 0.2.153 retains 0.2.151 and targets imported-source LSP continuity.
+
+
+## 0.2.164 Projects Refresh busy state
+
+The Projects toolbar disables `Refresh` immediately after a user click and changes its text to `Refreshing...` for the full `VALIDATING` / `RELOADING` / `SYNCHRONIZING` lifecycle. Terminal success and validation/server error states restore the normal `Refresh` label and enabled state. The service-level lock remains the authoritative duplicate-request guard, so disabling the Swing control is not relied upon for correctness.
+
+## 0.2.158 guarded PPJ reload lifecycle
+
+PPJ files are no longer native LSP documents. Opening a PPJ may still start the Papyrus client, but IntelliJ does not automatically send PPJ `didOpen`/`didChange`/`didSave`, preventing a malformed editor save from directly invoking papyrus-lang's destructive `ReloadProjects` path. The Projects Refresh button now discovers project-local PPJs, validates their XML, `@Variable` expansion, local imports, and source folders, and only then sends one explicit `textDocument/didSave` trigger. Completion is driven by the upstream `papyrus/projectsUpdated` notification, not a guessed timer.
+
+The Projects service keeps its previous successful snapshot during dirty, validating, reloading, and error states. Project-local PPJ VFS changes mark the view dirty rather than reloading automatically; created/deleted PSC source-tree changes are converted to the same guarded reload path instead of direct `workspace/didChangeWatchedFiles`, but those automatic source-tree reloads never restart a still-busy LSP process. The Projects tab now displays the exact phase and actionable details such as the PPJ file, original Import/Folder value, resolved missing path, XML parse failure, unresolved variable, or server synchronization failure. A reload remains `RELOADING` until the real `papyrus/projectsUpdated` event arrives; there is no guessed timeout. If the user explicitly presses Refresh again while that event is still outstanding, current PPJs are validated again and only then is the Papyrus LSP restarted through the public client-manager lifecycle. Expected gate: **72 UNIT + 20 PAPYRUS-LANG + 48 REAL CLION UI**.
 
 ## Baseline
 
-- Plugin source version: **0.2.156**.
+- Plugin source version: **0.2.164**.
 - 0.2.126 is the all-24 plugin-source inspection cleanup; expected runtime behavior is unchanged.
 - Authoritative Windows gate: user-verified **0.2.146 — 59/59 UNIT, 16/16 PAPYRUS-LANG, 39/39 REAL CLION UI = 114/114**.
 - Hardened LSP-semantic **Refactor | Rename** is VERIFIED at the 0.2.112 baseline.
@@ -228,3 +239,13 @@ Debugger is explicitly excluded. The active non-debugger burn-down has no remain
 These are candidates for hardening, not evidence that the corresponding implemented feature is broken.
 
 - CLion LSP compatibility: `plugin.xml` declares both `com.intellij.modules.lsp` and `com.intellij.modules.ultimate`.
+
+
+## 0.2.163 PPJ snapshot workspace
+
+- 0.2.161 is the user-confirmed green baseline.
+- PPJ validation failures now state the failure cause explicitly and wrap inside the Projects window.
+- papyrus-lang receives only private immutable validated PPJ snapshots, never the editable PPJ.
+- Cold start with an invalid PPJ falls back to the persisted last validated snapshot, or to a safe empty PPJ workspace when no fallback exists.
+- Editable PPJ revision tracking prevents a late edit during server restart from being incorrectly reported as READY.
+- Expected gate: 75 UNIT + 20 PAPYRUS-LANG + 48 REAL CLION UI.

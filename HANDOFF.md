@@ -1,8 +1,8 @@
-# Papyrus JetBrains Plugin handoff — 0.2.156 source / 0.2.155 runtime model confirmed
+# Papyrus JetBrains Plugin handoff — 0.2.164 source
 
 > Documentation boundary: `README.md` is the public/user-facing GitHub landing page. Version-by-version history, regression notes, test gates, inspection/lint details, local build paths, offline dependency layout, implementation notes, and other maintainer-only operational context belong here or in the dedicated living technical documents, not in `README.md`.
 
-0.2.153 was reported green and proved import-to-import navigation. 0.2.154 moved imports from content roots to source-only library roots; 0.2.155 made that library visible under External Libraries, and the user confirmed the result. 0.2.156 keeps that model and adds Papyrus Projects-style root labels plus filtering of project-local source/import overlap. Expected gate: **62 UNIT + 20 PAPYRUS-LANG + 47 REAL CLION UI**.
+0.2.153 was reported green and proved import-to-import navigation. 0.2.154 moved imports from content roots to source-only library roots; 0.2.155 made that library visible under External Libraries, and the user confirmed the result. 0.2.156 keeps that model and adds Papyrus Projects-style root labels plus filtering of project-local source/import overlap. Expected gate: **72 UNIT + 20 PAPYRUS-LANG + 48 REAL CLION UI**.
 
 0.2.147 fixed the IntelliJ Platform 262 background-thread read-access assertion in script-status polling by using `FileDocumentManager.getCachedDocument()` for modification-stamp checks instead of the read-lock-requiring `getDocument()`. The user reported the 0.2.147 build green; the full 59/16/39 regression gate has not been re-run for that version.
 
@@ -12,11 +12,16 @@
 
 Target runtime/test IDE: **CLion 2026.2.x / IntelliJ Platform 262**. Verified installation: **CLion 2026.2.1 / CL-262.9437.136**.
 
+
+## 0.2.164 — Projects Refresh busy state
+
+The Projects `Refresh` button now switches immediately to a native disabled `Refreshing...` state on click and stays disabled through `VALIDATING`, `RELOADING`, and `SYNCHRONIZING`. The label returns to `Refresh` on success or any terminal validation/server error. The button reserves enough width for both labels so the toolbar does not jump. This is UI feedback only; `PapyrusProjectsService.reloadFromProjectFilesAsync()` already rejects duplicate reload requests under `refreshLock`, so programmatic or pre-listener duplicate invocations remain fail-closed.
+
 ## Current source state
 
-- Current source version: **0.2.156**.
+- Current source version: **0.2.164**.
 - 0.2.126 is the all-24 inspection cleanup. It does not add a Papyrus feature; it refactors plugin-owned warnings, updates deprecated/DevKit APIs, adds descriptor/live-template i18n, and documents every submitted screenshot in `INSPECTION_AUDIT.md`. Vendor/generated artifacts remain untouched.
-- Authoritative user-reported Windows gate: **0.2.146 — 59/59 UNIT, 16/16 PAPYRUS-LANG, 39/39 REAL CLION UI = 114/114**.
+- Latest user-confirmed green Windows gate: **0.2.163 — 75/75 UNIT, 20/20 PAPYRUS-LANG, 48/48 REAL CLION UI**.
 - Hardened semantic **Refactor | Rename** is VERIFIED at the 0.2.112 baseline.
 - The broad non-debugger port/parity burn-down is complete and verified in 0.2.138: Stage 1 covers semantic Completion/Definition/References edges, Stage 2 real-IDE Syntax Tree/document sync/diagnostics, Stage 3 Project Infos/script status, and Stage 4 safe Pyro task discovery/compiler-output navigation. Debugger is explicitly deferred.
 - Bounded **Compile Project**, the executable `PapyrusProject` IDE Run Configuration, and project-level opt-in Build Project are VERIFIED. 0.2.124 keeps the active runtime/test target on CLion and replaces the Java-only New Project language generator with `DirectoryProjectGenerator`.
@@ -352,3 +357,36 @@ The user confirmed the 0.2.154 declaration chain works (`project -> import -> im
 The user confirmed `External Libraries -> Papyrus Imports` is visible, but root folders were presented only by filesystem leaf names (`Scripts`, `scripts`, `Source`, etc.). 0.2.156 adds a `ProjectViewNodeDecorator` that changes presentation only for exact managed Papyrus import roots and reuses `PapyrusProjectsPresentation.formatIncludeLabel`, keeping labels consistent with the Papyrus Projects tool window.
 
 The upstream `papyrus-lang` Skyrim SE PPJ lists `.\Source\Scripts` in both `<Imports>` and `<Folders>`, so project-local source/import overlap is canonical rather than an error. The managed external library now excludes any import path covered by a local non-remote source include. This removes entries such as the user's own `src: src` from External Libraries without changing PPJ semantics or papyrus-lang resolution. A dedicated unit test covers the `Data: Scripts` / `racemenu: scripts` labels; expected UNIT count is 62.
+
+
+### 0.2.158 guarded PPJ reload and visible error state — 2026-08-14
+
+The user reported that an invalid PPJ import could collapse the entire papyrus-lang Projects graph until IDE restart and that the Projects Refresh button only re-read `papyrus/projectInfos` rather than reloading PPJ content. Upstream `WorkspaceManager` reloads all projects on PPJ `didSave`, while `ProjectManager.UpdateProjects(ReloadProjects)` clears existing hosts before constructing the replacement graph. 0.2.158 therefore removes PPJ files from native IntelliJ LSP document synchronization and makes reload explicitly guarded.
+
+Project-local PPJ VFS changes now mark Projects as dirty without touching the server. Refresh discovers all real project-local PPJs, validates XML, upstream-style `@Variable` expansion, local Import directories, and Folder directories, then sends exactly one PPJ `didSave` because upstream reloads the whole workspace for any PPJ save. The service waits for `papyrus/projectsUpdated`; there is no fixed completion timeout. Multiple explicit reloads are tracked by generation so stale confirmations cannot overwrite a newer dirty/validation state. Created/deleted PSC changes use the same guarded reload instead of the raw upstream watched-file reload path, but automatic source-tree reloads never restart a still-busy LSP process.
+
+`PapyrusProjectsService` now preserves the last successful snapshot during dirty/reload/error states. The Projects tab shows phase-specific summary/details and explicitly says when the previous project configuration is being displayed. Validation errors include the PPJ relative path and the original/resolved bad Import or Folder. Reload completion is event-driven: `RELOADING` persists until `papyrus/projectsUpdated` arrives. There is no elapsed-time restart heuristic. If the user explicitly presses Refresh again while the previous reload is still unconfirmed, the current PPJs are revalidated and only then is the Papyrus LSP restarted via the public client-manager lifecycle. Nine unit regressions cover valid variable/remote-import expansion, missing imports, missing source folders, malformed XML, unresolved/cyclical/duplicate variables, a missing Imports section, and an invalid PPJ XML namespace. A new REAL CLION UI regression saves an invalid PPJ, verifies the live server graph and last-known-good tree survive, checks the visible validation error, restores the file, presses guarded Refresh, and requires event-confirmed recovery without IDE restart. Expected gate: **72 UNIT + 20 PAPYRUS-LANG + 48 REAL CLION UI**.
+
+### 0.2.157 Windows result and 0.2.158 test stabilization — 2026-08-14
+
+The user ran the 0.2.157 gate. BUILD and PAPYRUS-LANG were green. UNIT had one race in `WindowsKillOnCloseJobTest`: the child PID file could exist briefly before its contents were visible, so the test parsed an empty string. 0.2.158 waits for a non-empty parseable PID instead of mere file existence; production Job Object code is unchanged. REAL CLION UI reached the new PPJ reload test but timed out before the invalid-PPJ step because earlier compile tests intentionally create project-local PPJs and therefore leave the guarded Projects status `DIRTY`. 0.2.158 explicitly performs a guarded Refresh and waits for the real `papyrus/projectsUpdated`-confirmed READY baseline before exercising invalid PPJ validation/recovery. Production reload completion still has no guessed timeout.
+
+
+## 0.2.160 — PPJ watcher uses standard IntelliJ VFS_CHANGES
+- Replaced the `VFS_CHANGES_BG` subscription with the long-standing public `VirtualFileManager.VFS_CHANGES` + `BulkFileListener` route.
+- The callback stays lightweight: classify PPJ/PSC/FLG events, mark PPJ dirty, and schedule guarded reload work; no polling or custom filesystem watcher.
+- UI regression now proves that a real VFS event for `runtime.ppj` is observed before asserting DIRTY, so VFS delivery and Projects state are diagnosed separately.
+- Expected gate remains 72 UNIT + 20 PAPYRUS-LANG + 48 REAL CLION UI.
+
+
+## 0.2.163 — immutable validated PPJ workspace, cold-start guard, explicit errors
+
+0.2.161 is the user-confirmed green baseline. 0.2.163 closes the remaining PPJ safety gaps without sending editable `.ppj` documents through native LSP synchronization. Successful validation now materializes a private immutable PPJ workspace under the JetBrains system directory. Local Import/Folder/Script/Output paths are expanded and made absolute before the snapshot is published, so relocating the PPJ into the private workspace does not change project semantics. The Papyrus LSP initializes against that private workspace and answers later `workspace/workspaceFolders` requests with the same validated root.
+
+This removes the validation/read TOCTOU window: the server never rereads the mutable project PPJ for an approved generation. A user edit after validation can only make the editable configuration DIRTY; it cannot alter the immutable bytes already selected for the server. A separate editable-project revision is tracked so a late edit cannot be accidentally turned back into READY by a server restart.
+
+Cold start now runs the same preflight. If the current PPJ is invalid, the last persisted validated generation is reused. If no validated generation exists yet, the server starts against a safe empty PPJ workspace instead of discovering the invalid project file. The validation error remains visible while the fallback graph is used.
+
+Projects validation errors are now self-identifying (`ERROR: PPJ validation failed: ...`) and include the concrete cause, e.g. `import directory does not exist`, followed by the original Import and resolved path. Details use a wrapping text area with a zero minimum width so long Windows paths no longer impose an 850 px HTML-label width on the tool window.
+
+Regression coverage adds immutable-path materialization, validated workspace-folder override, an explicit visible `ERROR:` assertion, private-workspace assertion, and LSP restart while the real PPJ remains invalid. Expected UNIT count increases from 72 to 75; PAPYRUS-LANG remains 20 and REAL CLION UI remains 48.

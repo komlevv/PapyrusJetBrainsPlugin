@@ -28,7 +28,9 @@ import dev.papyrus.jetbrains.protocol.PapyrusLsp4jServer;
 import org.eclipse.lsp4j.ClientCapabilities;
 import org.eclipse.lsp4j.DidChangeWatchedFilesCapabilities;
 import org.eclipse.lsp4j.WorkspaceClientCapabilities;
+import org.eclipse.lsp4j.WorkspaceFolder;
 import org.eclipse.lsp4j.CompletionOptions;
+import org.eclipse.lsp4j.InitializeParams;
 import org.eclipse.lsp4j.InitializeResult;
 import org.eclipse.lsp4j.ReferenceOptions;
 import org.eclipse.lsp4j.ServerCapabilities;
@@ -38,10 +40,29 @@ import org.eclipse.lsp4j.jsonrpc.messages.Either;
 import org.eclipse.lsp4j.services.LanguageServer;
 import org.jetbrains.annotations.NotNull;
 
+import java.nio.file.Path;
 import java.util.ArrayList;
 import java.util.List;
 
 public final class PapyrusLspClientDescriptor extends ProjectWideLspClientDescriptor {
+
+    private volatile Path serverWorkspaceRoot;
+
+    private @NotNull Path ensureServerWorkspacePrepared() {
+        Path root = serverWorkspaceRoot;
+        if (root != null) {
+            return root;
+        }
+        synchronized (this) {
+            root = serverWorkspaceRoot;
+            if (root == null) {
+                root = PapyrusProjectsService.getInstance(getProject())
+                        .prepareLanguageServerWorkspaceForStart();
+                serverWorkspaceRoot = root;
+            }
+            return root;
+        }
+    }
 
     public PapyrusLspClientDescriptor(Project project) {
         super(project, "Papyrus");
@@ -50,12 +71,24 @@ public final class PapyrusLspClientDescriptor extends ProjectWideLspClientDescri
     @Override
     public boolean isSupportedFile(@NotNull VirtualFile file) {
         String extension = file.getExtension();
-        return "psc".equalsIgnoreCase(extension) || "ppj".equalsIgnoreCase(extension);
+        return "psc".equalsIgnoreCase(extension);
     }
 
     @Override
     public @NotNull String getLanguageId(@NotNull VirtualFile file) {
         return "ppj".equalsIgnoreCase(file.getExtension()) ? "papyrus-project" : "papyrus";
+    }
+
+    @Override
+    @SuppressWarnings("deprecation") // Older papyrus-lang initialization paths still read rootUri/rootPath; both must use the validated snapshot.
+    public @NotNull InitializeParams createInitializeParams() {
+        InitializeParams params = super.createInitializeParams();
+        Path root = ensureServerWorkspacePrepared();
+        String uri = root.toUri().toASCIIString();
+        params.setRootUri(uri);
+        params.setRootPath(root.toString());
+        params.setWorkspaceFolders(List.of(new WorkspaceFolder(uri, "Papyrus Validated Projects")));
+        return params;
     }
 
     @Override
@@ -146,8 +179,8 @@ public final class PapyrusLspClientDescriptor extends ProjectWideLspClientDescri
                 }
 
                 // Project info supplies the authoritative Papyrus import graph. Refresh after
-                // capability normalization so imports become IntelliJ content before navigation.
-                PapyrusProjectsService.getInstance(getProject()).refreshAsync();
+                // capability normalization so the source-only Papyrus Imports library stays current.
+                PapyrusProjectsService.getInstance(getProject()).languageServerStarted();
             }
         };
     }
@@ -182,8 +215,8 @@ public final class PapyrusLspClientDescriptor extends ProjectWideLspClientDescri
             DidChangeWatchedFilesCapabilities watchedFiles = workspace.getDidChangeWatchedFiles();
             if (watchedFiles != null) {
                 // papyrus-lang registers workspace/didChangeWatchedFiles with empty options.
-                // IntelliJ Platform 2026.2 expects a non-null watcher list, so use our VSIX-equivalent
-                // VFS bridge instead of the server's dynamic registration.
+                // IntelliJ Platform 2026.2 expects a non-null watcher list, so our guarded VFS bridge
+                // owns source-tree changes and validates PPJs before any project reload.
                 watchedFiles.setDynamicRegistration(false);
             }
         }
@@ -197,7 +230,16 @@ public final class PapyrusLspClientDescriptor extends ProjectWideLspClientDescri
     ) {
         return new PapyrusLsp4jClient(
                 getProject(),
-                new PapyrusSafeServerNotificationsHandler(serverNotificationsHandler)
+                new PapyrusSafeServerNotificationsHandler(
+                        serverNotificationsHandler,
+                        () -> {
+                            Path root = PapyrusProjectsService.getInstance(getProject()).getLanguageServerWorkspaceRoot();
+                            return List.of(new WorkspaceFolder(
+                                    root.toUri().toASCIIString(),
+                                    "Papyrus Validated Projects"
+                            ));
+                        }
+                )
         );
     }
 
@@ -208,6 +250,8 @@ public final class PapyrusLspClientDescriptor extends ProjectWideLspClientDescri
 
     @Override
     public @NotNull GeneralCommandLine createCommandLine() {
+        ensureServerWorkspacePrepared();
+
         PapyrusLaunchConfiguration configuration = PapyrusLaunchConfigurationResolver.resolve(
                 PapyrusSettings.getInstance().getState()
         );

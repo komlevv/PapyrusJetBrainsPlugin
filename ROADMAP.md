@@ -4,9 +4,9 @@ This document contains only **remaining decisions/work**. Completed per-version 
 
 ## Current baseline
 
-- Current source: **0.2.156**. 0.2.151's editor-local Ctrl+B route is user-confirmed working; 0.2.154 moved imports to a source-only library, 0.2.155 made source-only roots visible under External Libraries, and 0.2.156 aligns External Libraries root labels with Papyrus Projects and excludes imports already represented by local project sources.
+- Current source: **0.2.164**. 0.2.151's editor-local Ctrl+B route is user-confirmed working; 0.2.154-0.2.156 established the source-only import-library model; 0.2.158 adds guarded PPJ validation/reload state, last-known-good project snapshots, and explicit user-visible reload errors.
 - 0.2.126: plugin-owned cleanup for all 24 submitted CLion inspection screenshots; no intended Papyrus feature change.
-- Current authoritative gate: user-verified **59 unit / 16 exact-upstream server / 39 real-CLion = 114/114** on **0.2.146**.
+- Current authoritative gate: user-verified **75 unit / 20 exact-upstream server / 48 real-CLion = 143/143** on **0.2.163**.
 - Hardened semantic Papyrus Rename is VERIFIED at the 0.2.112 baseline.
 - The broad non-debugger feature port/parity burn-down is complete and verified in 0.2.138. Stage 1 closed Completion/Definition/References semantic edges, Stage 2 the real-IDE document-sync/Syntax Tree/diagnostics gap, Stage 3 Project Infos/script-status parity, and Stage 4 safe task discovery/compiler-output navigation.
 - Bounded safe-Pyro compile, the native `Papyrus Project` Run Configuration, and opt-in `Build Project / Ctrl+F9` routing are VERIFIED. 0.2.124 keeps the target IDE on CLion 2026.2.1, removes IDEA-specific Starter/build metadata, and ports New Project to `DirectoryProjectGenerator`.
@@ -19,7 +19,7 @@ This document contains only **remaining decisions/work**. Completed per-version 
 
 The current safe/read-only SSE/AE feature set is in good parity shape. See `PORT_STATUS.md` for the detailed matrix.
 
-## 0.2.156 acceptance gate
+## 0.2.158 acceptance gate
 
 - `Papyrus Imports` remains source-only: imports are `ProjectFileIndex.isInLibrarySource == true` and `ProjectFileIndex.isInContent == false`.
 - The managed library uses the Papyrus import library kind and exposes `OrderRootType.SOURCES` as its external root type.
@@ -27,7 +27,15 @@ The current safe/read-only SSE/AE feature set is in good parity shape. See `PORT
 - Import-root display names reuse `PapyrusProjectsPresentation.formatIncludeLabel`, e.g. `Data: Scripts` and `racemenu: scripts`.
 - A local source directory that is also listed in PPJ `<Imports>` is not duplicated under External Libraries.
 - `project.psc -> imported Quest.psc -> imported Form.psc` continues to work, including physical Ctrl+B.
-- Expected gate is **62 UNIT + 20 PAPYRUS-LANG + 47 REAL CLION UI**.
+- Expected gate is **72 UNIT + 20 PAPYRUS-LANG + 48 REAL CLION UI**.
+
+### PPJ reload robustness
+
+- Keep PPJ files out of native IntelliJ LSP document synchronization so an ordinary editor save cannot directly trigger upstream `ReloadProjects`.
+- Mark saved project-local PPJs dirty and require the guarded reload path to validate XML, variables, local imports, and source folders before sending `textDocument/didSave`.
+- Treat `papyrus/projectsUpdated` as the completion event; do not infer completion from wall-clock time. Automatic source-tree reloads must never restart a still-busy LSP process; only a second explicit user Refresh may request validated restart recovery.
+- Preserve the last successfully loaded `papyrus/projectInfos` snapshot and managed import library when validation or server synchronization fails.
+- Surface dirty, validating, reloading, synchronizing, validation-error, and server-error states in the Projects tab with actionable PPJ/path details.
 
 ## 0.2.154 acceptance gate
 
@@ -267,3 +275,13 @@ For every future iteration:
 6. run `gradlew.bat test` on the target Windows environment and use `build/papyrus-test-report.txt` as the authoritative result.
 
 - CLion LSP compatibility: `plugin.xml` declares both `com.intellij.modules.lsp` and `com.intellij.modules.ultimate`.
+
+
+## 0.2.163 acceptance gate
+
+- 75 UNIT tests.
+- 20 PAPYRUS-LANG tests.
+- 48 REAL CLION UI tests.
+- PPJ error text must include `ERROR: PPJ validation failed: <cause>` plus the original/resolved path details.
+- LSP workspace must be outside the editable project root.
+- Restarting the Papyrus LSP while the real PPJ is invalid must preserve the validated fallback graph and keep `VALIDATION_ERROR` visible.

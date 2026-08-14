@@ -1,6 +1,6 @@
 # CLion inspection audit — all 24 submitted screenshots
 
-> Current continuity note (0.2.156 source / 0.2.146 authoritative full-green baseline): the 0.2.145 high-confidence offline AST cleanup plus the 0.2.146 checked-exception correction are user-verified by the full **114/114** Windows gate. 0.2.147 added the script-status background-thread read-access fix; 0.2.148 expanded Definition/physical-shortcut diagnostics; 0.2.150 proved the public-API Papyrus-local shortcut can outrank Rider but its plain wrapper did not navigate; 0.2.151 re-enters the registered platform action through public `ActionManager.tryToExecute(...)` and its physical Ctrl+B behavior is user-confirmed; the no-interceptor 0.2.152 diagnostic failed as expected; 0.2.153 proved import-to-import navigation by using managed content roots; 0.2.154 corrects that dependency model to source-only library roots and adds an import-only Go To Declaration bridge; 0.2.156 adds a dedicated library type so those `SOURCES` roots are actually surfaced by the standard External Libraries node. This file remains the living disposition of IDE/static-analysis findings; obsolete per-version audit files have been removed.
+> Current continuity note (0.2.158 source / 0.2.146 authoritative full-green baseline): the 0.2.145 high-confidence offline AST cleanup plus the 0.2.146 checked-exception correction are user-verified by the full **114/114** Windows gate. 0.2.147 added the script-status background-thread read-access fix; 0.2.148 expanded Definition/physical-shortcut diagnostics; 0.2.150 proved the public-API Papyrus-local shortcut can outrank Rider but its plain wrapper did not navigate; 0.2.151 re-enters the registered platform action through public `ActionManager.tryToExecute(...)` and its physical Ctrl+B behavior is user-confirmed; the no-interceptor 0.2.152 diagnostic failed as expected; 0.2.153 proved import-to-import navigation by using managed content roots; 0.2.154 corrects that dependency model to source-only library roots and adds an import-only Go To Declaration bridge; 0.2.156 adds a dedicated library type so those `SOURCES` roots are actually surfaced by the standard External Libraries node. This file remains the living disposition of IDE/static-analysis findings; obsolete per-version audit files have been removed.
 
 
 
@@ -34,6 +34,10 @@ Scope carried forward through **PapyrusJetBrainsPlugin 0.2.145**, retaining the 
 | 24  | Plugin descriptor/live-template i18n plus action-description capitalization                                                                                                                   | Ours                                   | **Fixed.** Added `messages.PapyrusBundle`; configurables/actions use resource keys; all 20 Live Template descriptions use `key` + `resource-bundle`; action description capitalization corrected. Unit contracts verify the localized descriptor surface.                                                                                                                                                                                                                                         |
 
 
+## 0.2.158 PPJ reload API/inspection note
+
+The reload guard uses JDK XML APIs with external DTD/schema/entity access disabled, project-local bounded PPJ discovery already used by compile-task discovery, public `LspClient.sendNotification`, and the upstream `papyrus/projectsUpdated` notification already exposed by `PapyrusLsp4jClient`. PPJ files are excluded from the descriptor's supported-document set and from the custom incremental didChange compatibility bridge, while `PapyrusLspIntegrationProvider` may still start the server when a PPJ is opened. Recovery uses the public `LspClientManager.stopAndRestartClientsIfNeeded(...)` lifecycle only after a second explicit Refresh and a fresh successful PPJ validation; no polling or wall-clock completion timeout is added.
+
 ## 0.2.156 API/inspection note
 
 - Uses the public `LibraryType` / `PersistentLibraryKind` extension model and `LibraryEx.ModifiableModelEx.setKind(...)` to describe the plugin-owned source-only import library.
@@ -62,7 +66,7 @@ The Ctrl+B production fix intentionally avoids `ActionUpdaterInterceptor`, `Acti
 - Do not edit generated Starter/CLion diagnostic, telemetry, report, event-stream, or log files.
 - Do not hide real plugin-source warnings with global inspection exclusions.
 - A suppression is acceptable only when the warning is caused by an unavoidable external/platform contract and the suppression is attached to the smallest possible declaration with an explanatory comment.
-- The current 0.2.156 acceptance target is **61 UNIT + 20 PAPYRUS-LANG + 47 REAL CLION UI**; historical smaller gates remain documented only where they identify a verified baseline.
+- The current 0.2.158 acceptance target is **72 UNIT + 20 PAPYRUS-LANG + 48 REAL CLION UI**; historical smaller gates remain documented only where they identify a verified baseline.
 ## 0.2.128 follow-up
 
 The 0.2.127 runtime gate exposed one stale UI-test selector created by the inspection cleanup: the production Settings label was intentionally changed to `Skyrim Special Edition / Creation Kit installation path:`, but I26 still waited for the old `... path:` literal. The production wording is retained; the test now keys off the actual Settings dialog plus the stable enable checkbox. This is test-harness maintenance, not a rollback of the inspection fix.
@@ -140,3 +144,7 @@ Remaining MAJOR heuristic findings are intentionally not mechanically changed: t
 - Uses the documented `ProjectViewNodeDecorator` presentation hook rather than replacing JetBrains project-tree nodes.
 - Renaming is presentation-only and applies only to exact roots currently managed by `PapyrusImportLibraryService`.
 - The dependency remains a source-only library; no `CLASSES` or content-root duplication is introduced.
+
+
+## 0.2.160 VFS route
+PPJ/source-tree tracking uses public IntelliJ Platform APIs only: `VirtualFileManager.VFS_CHANGES` and `BulkFileListener`. No `WatchService`, polling, internal VFS implementation, or timer-based completion heuristic is used. Heavy PPJ validation remains outside the VFS callback.

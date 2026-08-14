@@ -15,10 +15,13 @@ import dev.papyrus.jetbrains.protocol.DocumentSyntaxTreeParams;
 import dev.papyrus.jetbrains.protocol.PapyrusLsp4jServer;
 import dev.papyrus.jetbrains.protocol.ProjectInfos;
 import dev.papyrus.jetbrains.protocol.ProjectInfosParams;
+import kotlin.Unit;
+import org.eclipse.lsp4j.DidSaveTextDocumentParams;
 import org.eclipse.lsp4j.TextDocumentIdentifier;
 import org.jetbrains.annotations.NotNull;
 import org.jetbrains.annotations.Nullable;
 
+import java.nio.file.Path;
 import java.util.Collection;
 
 @Service(Service.Level.PROJECT)
@@ -100,6 +103,41 @@ public final class PapyrusLanguageService {
             }
         }
         return null;
+    }
+
+
+    /**
+     * Sends the PPJ save notification that papyrus-lang uses as its explicit project-reload trigger.
+     * PPJ files are intentionally excluded from native IntelliJ LSP document synchronization so this
+     * guarded path is the only plugin-owned reload entry point.
+     */
+    public boolean notifyProjectSaved(@NotNull Path projectFile) {
+        Path absolute = projectFile.toAbsolutePath().normalize();
+        if (!java.nio.file.Files.isRegularFile(absolute)) {
+            return false;
+        }
+
+        String uri = absolute.toUri().toASCIIString();
+        boolean sent = false;
+        for (LspClient client : runningClients()) {
+            DidSaveTextDocumentParams params = new DidSaveTextDocumentParams();
+            params.setTextDocument(new TextDocumentIdentifier(uri));
+            client.sendNotification(server -> {
+                server.getTextDocumentService().didSave(params);
+                return Unit.INSTANCE;
+            });
+            sent = true;
+        }
+        return sent;
+    }
+
+    /**
+     * Restarts Papyrus LSP clients through the public IntelliJ client-manager lifecycle.
+     * Callers are responsible for validating PPJ files before invoking this recovery action.
+     */
+    public void restartClients() {
+        LspClientManager.getInstance(project)
+                .stopAndRestartClientsIfNeeded(PapyrusLspIntegrationProvider.class);
     }
 
     public boolean hasRunningClient() {

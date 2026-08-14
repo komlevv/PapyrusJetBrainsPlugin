@@ -1769,11 +1769,17 @@ internal class PapyrusEditorFeaturesUiTest {
                 "Refresh probe unexpectedly exists in the initial Project Infos snapshot",
             )
 
+            val watcherEventsBeforeCreate = support.papyrusWorkspaceFileWatcherRelevantEventCount(ide.project)
             val createdPath = support.createProjectTextFile(ide.project, relativePath, text)
             assertTrue(
                 expectedFile.toString().replace('\\', '/').equals(createdPath.replace('\\', '/'), ignoreCase = true),
                 "Test support created the refresh probe outside the expected project path: expected=$expectedFile actual=$createdPath",
             )
+            ide.waitFor("official VFS create event for ProjectRefreshProbe.psc", 15.seconds) {
+                support.papyrusWorkspaceFileWatcherRelevantEventCount(ide.project) > watcherEventsBeforeCreate &&
+                    support.papyrusWorkspaceFileWatcherLastRelevantEvent(ide.project)
+                        .contains("ProjectRefreshProbe.psc", ignoreCase = true)
+            }
             ide.waitFor("Project Infos refresh after .psc create", 30.seconds) {
                 support.papyrusProjectInfosReady(ide.project) &&
                     support.papyrusProjectInfosContainsFile(ide.project, expectedFile.toString())
@@ -1913,6 +1919,138 @@ internal class PapyrusEditorFeaturesUiTest {
                 brokenSource.toRealPath().toString().replace('\\', '/'),
                 ignoreCase = true,
             )
+        }
+    }
+
+
+    @Test
+    @Order(48)
+    fun invalidPpjReloadIsBlockedAndRecoversWithoutIdeRestart() {
+        val support = ide.utility<PapyrusUiTestSupportRemote>()
+        val toolWindow = ide.service<ToolWindowManagerRemote>(ide.project).getToolWindow("Papyrus Projects")
+        assertNotNull(toolWindow, "Papyrus Projects tool window is missing")
+        ide.edt { toolWindow!!.show() }
+        // Order 39 intentionally opens the Output content for compiler diagnostics. This test
+        // asserts visible Projects status text, so do not inherit the previously selected tab.
+        assertTrue(
+            support.selectPapyrusProjectsContent(ide.project),
+            "Papyrus Projects tool window did not select the Projects content before PPJ status assertions",
+        )
+
+        // Earlier compile tests intentionally create additional project-local PPJs, which marks the
+        // guarded project graph DIRTY. Establish a fresh, event-confirmed baseline instead of
+        // assuming those prior filesystem changes left the status at READY.
+        support.reloadPapyrusProjects(ide.project)
+        ide.waitFor("event-confirmed Papyrus Projects baseline before PPJ validation test", 60.seconds) {
+            toolWindow!!.isVisible() &&
+                support.papyrusProjectInfosReady(ide.project) &&
+                support.papyrusProjectsStatusPhase(ide.project) == "READY"
+        }
+        val serverWorkspace = Path.of(support.papyrusLanguageServerWorkspaceRoot(ide.project)).toAbsolutePath().normalize()
+        assertFalse(
+            serverWorkspace.startsWith(fixture.root.toAbsolutePath().normalize()),
+            "papyrus-lang must use a private validated PPJ snapshot workspace, not the editable project root: $serverWorkspace",
+        )
+
+        assertTrue(
+            support.papyrusWorkspaceFileWatcherStarted(ide.project),
+            "Project-bound VirtualFileManager.VFS_CHANGES listener is not active before PPJ edit",
+        )
+
+        val projectFile = fixture.root.resolve("runtime.ppj")
+        val original = Files.readString(projectFile)
+        val closingImports = "</Imports>"
+        assertTrue(original.contains(closingImports), "runtime.ppj does not contain an Imports section")
+        val invalidImport = ".\\DefinitelyMissingPpjImport"
+        val invalid = original.replace(
+            closingImports,
+            "        <Import>$invalidImport</Import>\n    $closingImports",
+        )
+        val targetPath = fixture.target.toRealPath().toString()
+
+        try {
+            val watcherRelevantBeforeInvalidEdit = support.papyrusWorkspaceFileWatcherRelevantEventCount(ide.project)
+            support.createProjectTextFile(ide.project, "runtime.ppj", invalid)
+            ide.waitFor("official VFS content event for invalid PPJ edit", NORMAL) {
+                support.papyrusWorkspaceFileWatcherRelevantEventCount(ide.project) > watcherRelevantBeforeInvalidEdit &&
+                    support.papyrusWorkspaceFileWatcherLastRelevantEvent(ide.project)
+                        .replace('\\', '/')
+                        .contains("runtime.ppj", ignoreCase = true)
+            }
+            ide.waitFor("dirty PPJ backend state after invalid edit", NORMAL) {
+                support.papyrusProjectsStatusPhase(ide.project) == "DIRTY"
+            }
+            ide.waitFor("visible dirty PPJ status after invalid edit", NORMAL) {
+                visibleTexts().any { it.contains("Papyrus project file changed") }
+            }
+
+            assertTrue(
+                support.livePapyrusProjectInfosContainsFile(ide.project, targetPath),
+                "Saving an invalid PPJ must not send native didSave or destroy the live server project graph",
+            )
+
+            support.reloadPapyrusProjects(ide.project)
+            ide.waitFor("visible PPJ validation failure", NORMAL) {
+                support.papyrusProjectsStatusPhase(ide.project) == "VALIDATION_ERROR" &&
+                    support.papyrusProjectsStatusSummary(ide.project) == "PPJ validation failed: import directory does not exist" &&
+                    visibleTexts().any { it.contains("ERROR: PPJ validation failed: import directory does not exist") }
+            }
+
+            val details = support.papyrusProjectsStatusDetails(ide.project)
+            assertTrue(details.contains("runtime.ppj"), "Validation details do not identify the PPJ: $details")
+            assertTrue(details.contains(invalidImport), "Validation details do not identify the invalid Import: $details")
+            assertTrue(details.contains("DefinitelyMissingPpjImport"), "Validation details do not include the resolved missing path: $details")
+            assertTrue(
+                support.papyrusProjectsShowingLastKnownGood(ide.project),
+                "Validation failure must explicitly retain the last-known-good project snapshot",
+            )
+            assertTrue(
+                support.papyrusProjectInfosContainsFile(ide.project, targetPath),
+                "Validation failure removed the last-known-good Projects snapshot",
+            )
+            assertTrue(
+                support.livePapyrusProjectInfosContainsFile(ide.project, targetPath),
+                "Guarded validation failure still damaged the live papyrus-lang project graph",
+            )
+
+            // Cold/restart path: the editable PPJ is still invalid. The new server process must be
+            // initialized from the persisted last validated snapshot instead of discovering the bad
+            // runtime.ppj directly from the real workspace.
+            support.restartPapyrusLanguageServer(ide.project)
+            ide.waitFor("invalid PPJ cold-start fallback to last validated snapshot", 60.seconds) {
+                support.papyrusProjectsStatusPhase(ide.project) == "VALIDATION_ERROR" &&
+                    support.livePapyrusProjectInfosContainsFile(ide.project, targetPath)
+            }
+            assertTrue(
+                support.papyrusProjectsShowingLastKnownGood(ide.project),
+                "Restarting the LSP with an invalid PPJ did not retain the validated fallback snapshot",
+            )
+
+            val watcherRelevantBeforeFix = support.papyrusWorkspaceFileWatcherRelevantEventCount(ide.project)
+            support.createProjectTextFile(ide.project, "runtime.ppj", original)
+            ide.waitFor("official VFS content event after fixing PPJ import", NORMAL) {
+                support.papyrusWorkspaceFileWatcherRelevantEventCount(ide.project) > watcherRelevantBeforeFix &&
+                    support.papyrusWorkspaceFileWatcherLastRelevantEvent(ide.project)
+                        .replace('\\', '/')
+                        .contains("runtime.ppj", ignoreCase = true)
+            }
+            ide.waitFor("dirty PPJ state after fixing import", NORMAL) {
+                support.papyrusProjectsStatusPhase(ide.project) == "DIRTY"
+            }
+            support.reloadPapyrusProjects(ide.project)
+            ide.waitFor("event-confirmed PPJ recovery", 60.seconds) {
+                support.papyrusProjectsStatusPhase(ide.project) == "READY" &&
+                    support.papyrusProjectInfosContainsFile(ide.project, targetPath)
+            }
+            assertTrue(
+                support.livePapyrusProjectInfosContainsFile(ide.project, targetPath),
+                "Papyrus project graph did not recover after fixing the PPJ and pressing Refresh",
+            )
+        } finally {
+            if (Files.readString(projectFile) != original) {
+                support.createProjectTextFile(ide.project, "runtime.ppj", original)
+                support.reloadPapyrusProjects(ide.project)
+            }
         }
     }
 
@@ -2330,6 +2468,18 @@ internal class PapyrusEditorFeaturesUiTest {
         fun deleteProjectFile(project: Project, relativePath: String): Boolean
         fun papyrusProjectInfosReady(project: Project): Boolean
         fun papyrusProjectInfosContainsFile(project: Project, filePath: String): Boolean
+        fun livePapyrusProjectInfosContainsFile(project: Project, filePath: String): Boolean
+        fun papyrusWorkspaceFileWatcherStarted(project: Project): Boolean
+        fun papyrusWorkspaceFileWatcherRelevantEventCount(project: Project): Long
+        fun papyrusWorkspaceFileWatcherLastRelevantEvent(project: Project): String
+        fun selectPapyrusProjectsContent(project: Project): Boolean
+        fun papyrusProjectsStatusPhase(project: Project): String
+        fun papyrusProjectsStatusSummary(project: Project): String
+        fun papyrusProjectsStatusDetails(project: Project): String
+        fun papyrusProjectsShowingLastKnownGood(project: Project): Boolean
+        fun reloadPapyrusProjects(project: Project)
+        fun restartPapyrusLanguageServer(project: Project)
+        fun papyrusLanguageServerWorkspaceRoot(project: Project): String
         fun projectsTreeSnapshot(project: Project): String
         fun expandProjectsTreePath(project: Project, encodedPath: String): Boolean
         fun doubleClickProjectsTreePath(project: Project, encodedPath: String): Boolean

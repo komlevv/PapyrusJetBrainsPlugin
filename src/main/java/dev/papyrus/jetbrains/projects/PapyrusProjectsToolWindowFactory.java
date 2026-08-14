@@ -16,6 +16,7 @@ import com.intellij.openapi.wm.ToolWindow;
 import com.intellij.openapi.wm.ToolWindowFactory;
 import com.intellij.ui.components.JBLabel;
 import com.intellij.ui.components.JBScrollPane;
+import com.intellij.ui.components.JBTextArea;
 import com.intellij.ui.content.Content;
 import com.intellij.ui.content.ContentFactory;
 import com.intellij.ui.treeStructure.Tree;
@@ -38,6 +39,7 @@ import javax.swing.tree.DefaultTreeModel;
 import javax.swing.tree.DefaultTreeCellRenderer;
 import javax.swing.tree.TreePath;
 import java.awt.BorderLayout;
+import java.awt.Dimension;
 import java.awt.Component;
 import java.awt.FlowLayout;
 import java.awt.event.MouseAdapter;
@@ -48,6 +50,8 @@ import java.util.Map;
 public final class PapyrusProjectsToolWindowFactory implements ToolWindowFactory, DumbAware {
 
     private static final int SCRIPT_PAGE_SIZE = 250;
+    private static final String REFRESH_TEXT = "Refresh";
+    private static final String REFRESHING_TEXT = "Refreshing...";
 
     @Override
     public boolean shouldBeAvailable(@NotNull Project project) {
@@ -66,7 +70,7 @@ public final class PapyrusProjectsToolWindowFactory implements ToolWindowFactory
         outputContent.setDisposer(outputPanel);
         toolWindow.getContentManager().addContent(outputContent);
 
-        panel.refresh();
+        PapyrusProjectsService.getInstance(project).refreshAsync();
     }
 
     private static final class PapyrusProjectsPanel extends JPanel implements Disposable {
@@ -74,6 +78,8 @@ public final class PapyrusProjectsToolWindowFactory implements ToolWindowFactory
         private final PapyrusProjectsService projectsService;
         private final Tree tree;
         private final JBLabel statusLabel;
+        private final JBTextArea detailArea;
+        private final JButton refreshButton;
         private final JButton navigateButton;
 
         private PapyrusProjectsPanel(@NotNull Project project) {
@@ -82,6 +88,16 @@ public final class PapyrusProjectsToolWindowFactory implements ToolWindowFactory
             this.projectsService = PapyrusProjectsService.getInstance(project);
             this.tree = new Tree(new DefaultTreeModel(new DefaultMutableTreeNode("Papyrus")));
             this.statusLabel = new JBLabel("Loading Papyrus projects...");
+            this.detailArea = new JBTextArea();
+            detailArea.setEditable(false);
+            detailArea.setOpaque(false);
+            detailArea.setLineWrap(true);
+            detailArea.setWrapStyleWord(true);
+            detailArea.setRows(0);
+            detailArea.setColumns(48);
+            detailArea.setMinimumSize(new Dimension(0, 0));
+            detailArea.setFont(statusLabel.getFont());
+            detailArea.setVisible(false);
             this.navigateButton = new JButton("Navigate...");
             navigateButton.setEnabled(false);
             HelpTooltipKt.setToolTipText(navigateButton, HtmlChunk.text("Search LSP-reported Papyrus scripts without expanding the project tree"));
@@ -112,7 +128,15 @@ public final class PapyrusProjectsToolWindowFactory implements ToolWindowFactory
                 }
             });
 
-            JButton refreshButton = new JButton("Refresh");
+            this.refreshButton = new JButton(REFRESH_TEXT);
+            Dimension idleRefreshSize = refreshButton.getPreferredSize();
+            refreshButton.setText(REFRESHING_TEXT);
+            Dimension busyRefreshSize = refreshButton.getPreferredSize();
+            refreshButton.setText(REFRESH_TEXT);
+            refreshButton.setPreferredSize(new Dimension(
+                    Math.max(idleRefreshSize.width, busyRefreshSize.width),
+                    Math.max(idleRefreshSize.height, busyRefreshSize.height)
+            ));
             refreshButton.addActionListener(event -> refresh());
 
             JPanel toolbar = new JPanel(new FlowLayout(FlowLayout.LEFT, 6, 4));
@@ -120,25 +144,50 @@ public final class PapyrusProjectsToolWindowFactory implements ToolWindowFactory
             toolbar.add(navigateButton);
             toolbar.add(statusLabel);
 
-            add(toolbar, BorderLayout.NORTH);
+            JPanel header = new JPanel(new BorderLayout());
+            header.add(toolbar, BorderLayout.NORTH);
+            header.add(detailArea, BorderLayout.SOUTH);
+
+            add(header, BorderLayout.NORTH);
             add(new JBScrollPane(tree), BorderLayout.CENTER);
 
             projectsService.addListener(this::rebuildTree, this);
+            rebuildTree();
         }
 
         private void refresh() {
-            statusLabel.setText("Loading Papyrus projects...");
-            projectsService.refreshAsync();
+            if (projectsService.isReloadInProgress()) {
+                updateRefreshButton();
+                return;
+            }
+
+            // Disable immediately on the EDT instead of waiting for the asynchronous service listener.
+            // PapyrusProjectsService also rejects duplicate reloads under its own lock, so this is both
+            // user feedback and a second line of defense against repeated requests.
+            refreshButton.setText(REFRESHING_TEXT);
+            refreshButton.setEnabled(false);
+            refreshButton.setToolTipText("Papyrus project refresh is in progress");
+
+            projectsService.reloadFromProjectFilesAsync();
+            updateRefreshButton();
+        }
+
+        private void updateRefreshButton() {
+            boolean busy = projectsService.isReloadInProgress();
+            refreshButton.setText(busy ? REFRESHING_TEXT : REFRESH_TEXT);
+            refreshButton.setEnabled(!busy);
+            refreshButton.setToolTipText(busy ? "Papyrus project refresh is in progress" : null);
         }
 
         private void rebuildTree() {
             ProjectInfos infos = projectsService.getCurrentSnapshot();
+            PapyrusProjectsService.Status serviceStatus = projectsService.getStatus();
             DefaultMutableTreeNode root = new DefaultMutableTreeNode("Papyrus");
 
             if (infos == null) {
                 navigateButton.setEnabled(false);
-                statusLabel.setText("Papyrus language server is not ready");
                 tree.setModel(new DefaultTreeModel(root));
+                applyStatus(serviceStatus, null);
                 return;
             }
 
@@ -162,7 +211,46 @@ public final class PapyrusProjectsToolWindowFactory implements ToolWindowFactory
                 tree.setModel(model);
             }
             navigateButton.setEnabled(scriptCount > 0);
-            statusLabel.setText(projectCount + " project(s), " + scriptCount + " script(s)");
+            applyStatus(serviceStatus, projectCount + " project(s), " + scriptCount + " script(s)");
+        }
+
+        private void applyStatus(
+                @NotNull PapyrusProjectsService.Status serviceStatus,
+                String readySummary
+        ) {
+            String summary = serviceStatus.phase() == PapyrusProjectsService.Phase.READY && readySummary != null
+                    ? readySummary
+                    : serviceStatus.summary();
+            statusLabel.setText(summary);
+            updateRefreshButton();
+
+            String details = serviceStatus.details();
+            if (serviceStatus.showingLastKnownGood()) {
+                details = details.isBlank()
+                        ? "Showing the last successfully loaded project configuration."
+                        : details + "\nShowing the last successfully loaded project configuration.";
+            }
+
+            boolean error = serviceStatus.phase() == PapyrusProjectsService.Phase.VALIDATION_ERROR
+                    || serviceStatus.phase() == PapyrusProjectsService.Phase.SERVER_ERROR;
+            if (error) {
+                details = details.isBlank()
+                        ? "ERROR: " + summary
+                        : "ERROR: " + summary + "\n" + details;
+            }
+
+            boolean showDetails = serviceStatus.phase() != PapyrusProjectsService.Phase.READY
+                    && !details.isBlank();
+            statusLabel.setToolTipText(showDetails ? null : serviceStatus.details());
+            detailArea.setVisible(showDetails);
+            if (showDetails) {
+                detailArea.setText(details);
+                detailArea.setCaretPosition(0);
+                detailArea.setToolTipText(null);
+            } else {
+                detailArea.setText("");
+                detailArea.setToolTipText(null);
+            }
         }
 
         private void showScriptNavigator() {

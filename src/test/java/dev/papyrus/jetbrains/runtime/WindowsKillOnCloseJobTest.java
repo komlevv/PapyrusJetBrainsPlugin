@@ -55,12 +55,8 @@ public final class WindowsKillOnCloseJobTest {
                 job.assign(guardian.pid());
                 PapyrusHostGuardianMain.signal(gate);
 
-                long deadline = System.nanoTime() + Duration.ofSeconds(5).toNanos();
-                while (!Files.isRegularFile(childPidFile) && System.nanoTime() < deadline) {
-                    Thread.sleep(20);
-                }
-                assertTrue(Files.isRegularFile(childPidFile), "Guardian did not start its child after Job assignment");
-                long childPid = Long.parseLong(Files.readString(childPidFile).trim());
+                long childPid = waitForChildPid(childPidFile, Duration.ofSeconds(5));
+                assertTrue(childPid > 0, "Guardian did not publish its child PID after Job assignment");
                 childHandle = ProcessHandle.of(childPid).orElseThrow();
                 assertTrue(guardian.isAlive(), "Guardian exited before kill-on-close could be verified");
                 assertTrue(childHandle.isAlive(), "Guardian child exited before kill-on-close could be verified");
@@ -96,6 +92,26 @@ public final class WindowsKillOnCloseJobTest {
             classPath.append(location);
         }
         return classPath.toString();
+    }
+
+
+    @SuppressWarnings("BusyWait") // The child creates and writes the PID file in separate filesystem-visible steps.
+    private static long waitForChildPid(Path pidFile, Duration timeout) throws Exception {
+        long deadline = System.nanoTime() + timeout.toNanos();
+        while (System.nanoTime() < deadline) {
+            if (Files.isRegularFile(pidFile)) {
+                String text = Files.readString(pidFile).trim();
+                if (!text.isEmpty()) {
+                    try {
+                        return Long.parseLong(text);
+                    } catch (NumberFormatException ignored) {
+                        // Keep polling until the child has finished publishing the PID.
+                    }
+                }
+            }
+            Thread.sleep(20);
+        }
+        return -1L;
     }
 
     @SuppressWarnings("BusyWait") // Bounded test polling avoids adding a synchronization dependency to the child process.

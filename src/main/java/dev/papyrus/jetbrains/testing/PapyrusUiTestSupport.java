@@ -51,6 +51,7 @@ import com.intellij.platform.lsp.api.LspClient;
 import com.intellij.platform.lsp.api.LspClientManager;
 import dev.papyrus.jetbrains.lsp.PapyrusLspIntegrationProvider;
 import dev.papyrus.jetbrains.lsp.PapyrusLanguageService;
+import dev.papyrus.jetbrains.lsp.PapyrusWorkspaceFileWatcher;
 import dev.papyrus.jetbrains.actions.PapyrusActionTestBridge;
 import dev.papyrus.jetbrains.actions.PapyrusExternalUrlOpener;
 import dev.papyrus.jetbrains.config.PapyrusProjectSettings;
@@ -795,7 +796,71 @@ public final class PapyrusUiTestSupport {
 
     public static boolean papyrusProjectInfosContainsFile(Project project, String filePath) {
         requireEnabled();
-        ProjectInfos infos = PapyrusProjectsService.getInstance(project).getCurrentSnapshot();
+        return projectInfosContainsFile(
+                PapyrusProjectsService.getInstance(project).getCurrentSnapshot(),
+                filePath
+        );
+    }
+
+    public static boolean livePapyrusProjectInfosContainsFile(Project project, String filePath) {
+        requireEnabled();
+        return projectInfosContainsFile(
+                PapyrusLanguageService.getInstance(project).requestProjectInfos(),
+                filePath
+        );
+    }
+
+    public static boolean papyrusWorkspaceFileWatcherStarted(Project project) {
+        requireEnabled();
+        return project.getService(PapyrusWorkspaceFileWatcher.class).isStarted();
+    }
+
+    public static long papyrusWorkspaceFileWatcherRelevantEventCount(Project project) {
+        requireEnabled();
+        return project.getService(PapyrusWorkspaceFileWatcher.class).getRelevantEventCount();
+    }
+
+    public static String papyrusWorkspaceFileWatcherLastRelevantEvent(Project project) {
+        requireEnabled();
+        return project.getService(PapyrusWorkspaceFileWatcher.class).getLastRelevantEvent();
+    }
+
+    public static String papyrusProjectsStatusPhase(Project project) {
+        requireEnabled();
+        return PapyrusProjectsService.getInstance(project).getStatus().phase().name();
+    }
+
+    public static String papyrusProjectsStatusSummary(Project project) {
+        requireEnabled();
+        return PapyrusProjectsService.getInstance(project).getStatus().summary();
+    }
+
+    public static String papyrusProjectsStatusDetails(Project project) {
+        requireEnabled();
+        return PapyrusProjectsService.getInstance(project).getStatus().details();
+    }
+
+    public static boolean papyrusProjectsShowingLastKnownGood(Project project) {
+        requireEnabled();
+        return PapyrusProjectsService.getInstance(project).getStatus().showingLastKnownGood();
+    }
+
+    public static void reloadPapyrusProjects(Project project) {
+        requireEnabled();
+        PapyrusProjectsService.getInstance(project).reloadFromProjectFilesAsync();
+    }
+
+    public static void restartPapyrusLanguageServer(Project project) {
+        requireEnabled();
+        PapyrusLanguageService.getInstance(project).restartClients();
+    }
+
+    public static String papyrusLanguageServerWorkspaceRoot(Project project) {
+        requireEnabled();
+        return PapyrusProjectsService.getInstance(project).getLanguageServerWorkspaceRoot().toString();
+    }
+
+    private static boolean projectInfosContainsFile(ProjectInfos infos, String filePath) {
         if (infos == null) {
             return false;
         }
@@ -811,6 +876,25 @@ public final class PapyrusUiTestSupport {
             }
         }
         return false;
+    }
+
+    public static boolean selectPapyrusProjectsContent(Project project) {
+        requireEnabled();
+        return onEdt(() -> {
+            ToolWindow toolWindow = ToolWindowManager.getInstance(project).getToolWindow("Papyrus Projects");
+            if (toolWindow == null) {
+                return false;
+            }
+            ContentManager contentManager = toolWindow.getContentManager();
+            Content projectsContent = contentManager.findContent("Projects");
+            if (projectsContent == null) {
+                return false;
+            }
+            if (contentManager.getSelectedContent() != projectsContent) {
+                contentManager.setSelectedContent(projectsContent, true);
+            }
+            return contentManager.getSelectedContent() == projectsContent;
+        });
     }
 
     public static String projectsTreeSnapshot(Project project) {

@@ -108,7 +108,7 @@ public final class PapyrusDocumentSyncCompatibility implements Disposable {
 
     private static boolean isPapyrusFile(@NotNull VirtualFile file) {
         String extension = file.getExtension();
-        return "psc".equalsIgnoreCase(extension) || "ppj".equalsIgnoreCase(extension);
+        return "psc".equalsIgnoreCase(extension);
     }
 
     @Override

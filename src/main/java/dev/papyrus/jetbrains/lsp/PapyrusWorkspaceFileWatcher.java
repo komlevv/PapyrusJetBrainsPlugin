@@ -1,39 +1,45 @@
 package dev.papyrus.jetbrains.lsp;
 
 import com.intellij.openapi.Disposable;
-import com.intellij.openapi.application.ApplicationManager;
 import com.intellij.openapi.components.Service;
 import com.intellij.openapi.project.Project;
+import com.intellij.openapi.roots.ProjectFileIndex;
+import com.intellij.openapi.vfs.VirtualFile;
+import com.intellij.openapi.util.io.FileUtil;
 import com.intellij.openapi.vfs.VirtualFileManager;
-import com.intellij.openapi.vfs.newvfs.BulkFileListenerBackgroundable;
+import com.intellij.openapi.vfs.newvfs.BulkFileListener;
 import com.intellij.openapi.vfs.newvfs.events.VFileContentChangeEvent;
 import com.intellij.openapi.vfs.newvfs.events.VFileCreateEvent;
 import com.intellij.openapi.vfs.newvfs.events.VFileDeleteEvent;
 import com.intellij.openapi.vfs.newvfs.events.VFileEvent;
 import com.intellij.openapi.vfs.newvfs.events.VFileMoveEvent;
 import com.intellij.openapi.vfs.newvfs.events.VFilePropertyChangeEvent;
-import com.intellij.platform.lsp.api.LspClient;
-import com.intellij.platform.lsp.api.LspClientManager;
-import com.intellij.platform.lsp.api.LspServerState;
-import kotlin.Unit;
-import org.eclipse.lsp4j.DidChangeWatchedFilesParams;
-import org.eclipse.lsp4j.FileChangeType;
-import org.eclipse.lsp4j.FileEvent;
+import dev.papyrus.jetbrains.projects.PapyrusProjectsService;
 import org.jetbrains.annotations.NotNull;
+import org.jetbrains.annotations.TestOnly;
 
 import java.nio.file.Path;
-import java.util.ArrayList;
 import java.util.List;
 import java.util.Locale;
-import java.util.Set;
 
+/**
+ * Guards workspace changes that could make papyrus-lang rebuild its project graph.
+ *
+ * <p>Upstream reloads all PPJ projects for created/deleted PSC files. Sending that notification
+ * directly would bypass local PPJ validation, so this bridge converts source-tree changes into a
+ * guarded PPJ reload. Automatic source-tree updates never restart a still-busy LSP process; only a
+ * second explicit user Refresh may request that validated recovery. PPJ edits themselves are marked
+ * dirty and are never sent automatically to the server. The watcher uses the standard IntelliJ
+ * {@link VirtualFileManager#VFS_CHANGES} topic; the listener only classifies lightweight VFS events
+ * and schedules heavier validation/reload work outside the VFS callback.</p>
+ */
 @Service(Service.Level.PROJECT)
 public final class PapyrusWorkspaceFileWatcher implements Disposable {
 
-    private static final Set<String> WATCHED_EXTENSIONS = Set.of("psc", "ppj", "flg");
-
     private final Project project;
     private boolean started;
+    private long relevantEventCount;
+    private volatile String lastRelevantEvent = "<none>";
 
     public PapyrusWorkspaceFileWatcher(@NotNull Project project) {
         this.project = project;
@@ -44,139 +50,147 @@ public final class PapyrusWorkspaceFileWatcher implements Disposable {
             return;
         }
 
-        started = true;
-        ApplicationManager.getApplication()
-                .getMessageBus()
+        project.getMessageBus()
                 .connect(this)
-                .subscribe(VirtualFileManager.VFS_CHANGES_BG, new BulkFileListenerBackgroundable() {
+                .subscribe(VirtualFileManager.VFS_CHANGES, new BulkFileListener() {
                     @Override
                     public void after(@NotNull List<? extends VFileEvent> events) {
-                        collectAndForwardEvents(events);
+                        handleEvents(events);
                     }
                 });
+        started = true;
     }
 
-    private void collectAndForwardEvents(List<? extends VFileEvent> events) {
+    private void handleEvents(@NotNull List<? extends VFileEvent> events) {
         if (project.isDisposed()) {
             return;
         }
 
-        List<FileEvent> changedFiles = new ArrayList<>();
+        boolean guardedReloadRequired = false;
         for (VFileEvent event : events) {
-            appendFileEvents(changedFiles, event);
+            guardedReloadRequired |= handleEvent(event);
         }
 
-        if (changedFiles.isEmpty()) {
-            return;
+        if (guardedReloadRequired) {
+            PapyrusProjectsService.getInstance(project).reloadFromWorkspaceChangeAsync();
         }
-
-        // VFS callbacks run under a write action. Keep LSP traffic outside that callback.
-        ApplicationManager.getApplication().executeOnPooledThread(() -> forwardEvents(changedFiles));
     }
 
-    private void appendFileEvents(List<FileEvent> changedFiles, VFileEvent event) {
+    @TestOnly
+    public synchronized boolean isStarted() {
+        return started;
+    }
+
+    @TestOnly
+    public synchronized long getRelevantEventCount() {
+        return relevantEventCount;
+    }
+
+    @TestOnly
+    public @NotNull String getLastRelevantEvent() {
+        return lastRelevantEvent;
+    }
+
+    private boolean handleEvent(@NotNull VFileEvent event) {
         if (event instanceof VFilePropertyChangeEvent propertyChange && propertyChange.isRename()) {
-            appendPathTransition(changedFiles, propertyChange.getOldPath(), propertyChange.getNewPath());
-            return;
+            boolean reload = handlePathTransition(propertyChange.getOldPath(), propertyChange.getNewPath());
+            return reload;
         }
-
         if (event instanceof VFileMoveEvent moveEvent) {
-            appendPathTransition(changedFiles, moveEvent.getOldPath(), moveEvent.getNewPath());
-            return;
-        }
-
-        FileChangeType changeType = getChangeType(event);
-        if (changeType == null) {
-            return;
+            return handlePathTransition(moveEvent.getOldPath(), moveEvent.getNewPath());
         }
 
         String path = event.getPath();
-        if (!isWatchedProjectPath(path)) {
-            return;
-        }
-
-        changedFiles.add(new FileEvent(toFileUri(path), changeType));
-    }
-
-    private void appendPathTransition(List<FileEvent> changedFiles, String oldPath, String newPath) {
-        if (isWatchedProjectPath(oldPath)) {
-            changedFiles.add(new FileEvent(toFileUri(oldPath), FileChangeType.Deleted));
-        }
-        if (isWatchedProjectPath(newPath)) {
-            changedFiles.add(new FileEvent(toFileUri(newPath), FileChangeType.Created));
-        }
-    }
-
-    private void forwardEvents(List<FileEvent> changedFiles) {
-        if (project.isDisposed()) {
-            return;
-        }
-
-        DidChangeWatchedFilesParams params = new DidChangeWatchedFilesParams(changedFiles);
-        for (LspClient client : LspClientManager.getInstance(project)
-                .getClients(PapyrusLspIntegrationProvider.class)) {
-            if (client.getState() != LspServerState.Running) {
-                continue;
-            }
-            client.sendNotification(server -> {
-                server.getWorkspaceService().didChangeWatchedFiles(params);
-                return Unit.INSTANCE;
-            });
-        }
-    }
-
-    private boolean isWatchedProjectPath(String path) {
-        String extension = getExtension(path);
-        if (!WATCHED_EXTENSIONS.contains(extension)) {
+        if (!isProjectLocalEvent(event)) {
             return false;
         }
 
+        String extension = getExtension(path);
+        if ("ppj".equals(extension) || "psc".equals(extension) || "flg".equals(extension)) {
+            recordRelevantEvent(event, path);
+        }
+        if ("ppj".equals(extension)) {
+            notifyPpjDirty(path);
+            return false;
+        }
+
+        if ("psc".equals(extension)) {
+            return event instanceof VFileCreateEvent || event instanceof VFileDeleteEvent;
+        }
+
+        return "flg".equals(extension) && event instanceof VFileContentChangeEvent;
+    }
+
+    private boolean handlePathTransition(@NotNull String oldPath, @NotNull String newPath) {
+        boolean oldLocal = isProjectLocalPath(oldPath);
+        boolean newLocal = isProjectLocalPath(newPath);
+        String oldExtension = getExtension(oldPath);
+        String newExtension = getExtension(newPath);
+
+        if (oldLocal && "ppj".equals(oldExtension)) {
+            notifyPpjDirty(oldPath);
+        }
+        if (newLocal && "ppj".equals(newExtension)) {
+            notifyPpjDirty(newPath);
+        }
+
+        return (oldLocal && "psc".equals(oldExtension))
+                || (newLocal && "psc".equals(newExtension))
+                || (oldLocal && "flg".equals(oldExtension))
+                || (newLocal && "flg".equals(newExtension));
+    }
+
+    private synchronized void recordRelevantEvent(@NotNull VFileEvent event, @NotNull String path) {
+        relevantEventCount++;
+        lastRelevantEvent = event.getClass().getSimpleName()
+                + ":" + path
+                + ";fromSave=" + event.isFromSave()
+                + ";fromRefresh=" + event.isFromRefresh();
+    }
+
+    private void notifyPpjDirty(@NotNull String path) {
+        try {
+            PapyrusProjectsService.getInstance(project).projectFileChanged(Path.of(path));
+        } catch (RuntimeException ignored) {
+            // A malformed VFS path must not make the background file watcher fail.
+        }
+    }
+
+
+    private boolean isProjectLocalEvent(@NotNull VFileEvent event) {
+        VirtualFile file = event.getFile();
+        if (file != null && file.isValid()) {
+            try {
+                if (ProjectFileIndex.getInstance(project).isInContent(file)) {
+                    return true;
+                }
+            } catch (RuntimeException ignored) {
+                // Fall back to the event path for transient VFS/index states.
+            }
+        }
+        return isProjectLocalPath(event.getPath());
+    }
+
+    private boolean isProjectLocalPath(@NotNull String path) {
         String basePath = project.getBasePath();
         if (basePath == null || basePath.isBlank()) {
             return false;
         }
 
         try {
-            Path projectPath = Path.of(basePath).toAbsolutePath().normalize();
-            Path eventPath = Path.of(path).toAbsolutePath().normalize();
-            return eventPath.startsWith(projectPath);
+            return FileUtil.isAncestor(basePath, path, false);
         } catch (RuntimeException ignored) {
             return false;
         }
     }
 
-    private static String getExtension(String path) {
+    private static @NotNull String getExtension(@NotNull String path) {
         int separatorIndex = Math.max(path.lastIndexOf('/'), path.lastIndexOf('\\'));
         int dotIndex = path.lastIndexOf('.');
         if (dotIndex <= separatorIndex || dotIndex == path.length() - 1) {
             return "";
         }
         return path.substring(dotIndex + 1).toLowerCase(Locale.ROOT);
-    }
-
-    private static FileChangeType getChangeType(VFileEvent event) {
-        if (event instanceof VFileCreateEvent) {
-            return FileChangeType.Created;
-        }
-        if (event instanceof VFileDeleteEvent) {
-            return FileChangeType.Deleted;
-        }
-        if (event instanceof VFileContentChangeEvent) {
-            return FileChangeType.Changed;
-        }
-        return null;
-    }
-
-    private static String toFileUri(String path) {
-        String uri = Path.of(path).toAbsolutePath().normalize().toUri().toASCIIString();
-        String filePrefix = "file:///";
-        if (uri.startsWith(filePrefix)
-                && uri.length() > filePrefix.length() + 1
-                && uri.charAt(filePrefix.length() + 1) == ':') {
-            char drive = Character.toLowerCase(uri.charAt(filePrefix.length()));
-            return filePrefix + drive + "%3A" + uri.substring(filePrefix.length() + 2);
-        }
-        return uri;
     }
 
     @Override
