@@ -7,6 +7,7 @@ import com.intellij.openapi.diagnostic.Logger;
 import com.intellij.openapi.project.Project;
 import com.intellij.openapi.util.Disposer;
 import com.intellij.platform.lsp.api.LspClient;
+import dev.papyrus.jetbrains.config.PapyrusProjectSettings;
 import dev.papyrus.jetbrains.lsp.PapyrusLanguageService;
 import dev.papyrus.jetbrains.lsp.PapyrusWorkspaceFileWatcher;
 import dev.papyrus.jetbrains.protocol.ProjectInfos;
@@ -77,6 +78,11 @@ public final class PapyrusProjectsService {
     public PapyrusProjectsService(@NotNull Project project) {
         this.project = project;
         this.snapshotStore = new PapyrusProjectSnapshotStore(project);
+
+        // Force all plugin-owned project state from .idea/papyrus.xml through its
+        // version guard before Papyrus Projects or the language server can use it.
+        PapyrusProjectSettings.getInstance(project);
+        PapyrusImportLibraryService.getInstance(project).discardStaleManagedLibraryAsync();
     }
 
     public static PapyrusProjectsService getInstance(@NotNull Project project) {
@@ -600,8 +606,8 @@ public final class PapyrusProjectsService {
     private @NotNull Status dirtyStatus() {
         Path changed = lastChangedProjectFile;
         String details = changed != null
-                ? changed + "\nRefresh uses the current unsaved editor contents when present; Ctrl+S is not required."
-                : "The editable PPJ changed after the language server snapshot was prepared.\nRefresh uses the current unsaved editor contents when present; Ctrl+S is not required.";
+                ? changed.toString()
+                : "The editable PPJ changed after the language server snapshot was prepared.";
         return new Status(
                 Phase.DIRTY,
                 "Papyrus project file changed — click Refresh to validate and reload",

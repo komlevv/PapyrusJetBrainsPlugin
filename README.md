@@ -1,7 +1,7 @@
 > **Status: ALPHA** — active development; behavior and packaging may still change before the first stable release.
 > **Target IDE:** CLion **2026.2.x** on IntelliJ Platform **262**. Verified target: **CLion 2026.2.1 / CL-262.9437.136**.
 > **Platform:** Windows.
-> **Current source:** **0.2.166**. 0.2.163 is the user-confirmed green baseline; 0.2.166 fixes CRLF normalization in the real-IDE editor-buffer test helper. Refresh now validates the current in-memory `.ppj` editor buffer when it is unsaved, so Ctrl+S is not required before applying project changes; the immutable validated-snapshot isolation remains unchanged.
+> **Current source:** **0.2.168**. 0.2.163 is the user-confirmed green baseline; 0.2.168 versions project-local Papyrus state stored in `.idea/papyrus.xml` and rejects stale/unversioned state after a plugin upgrade. Refresh now validates the current in-memory `.ppj` editor buffer when it is unsaved, so Ctrl+S is not required before applying project changes; the immutable validated-snapshot isolation remains unchanged.
 
 # Papyrus Language Support for JetBrains CLion 
 

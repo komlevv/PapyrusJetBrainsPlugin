@@ -5,6 +5,7 @@ import com.intellij.openapi.components.Service;
 import com.intellij.openapi.components.State;
 import com.intellij.openapi.components.Storage;
 import com.intellij.openapi.project.Project;
+import dev.papyrus.jetbrains.PapyrusPluginVersion;
 import org.jetbrains.annotations.NotNull;
 
 import java.nio.file.Path;
@@ -22,12 +23,15 @@ public final class PapyrusProjectSettings implements PersistentStateComponent<Pa
     public static final String BUILD_SYSTEM_PAPYRUS = "papyrus";
 
     public static final class SettingsState {
+        // Empty is intentional: an unversioned state loaded from an older .idea/papyrus.xml
+        // must be distinguishable from state created by the current plugin build.
+        public String pluginVersion = "";
         public String gameId = SKYRIM_SE_GAME_ID;
         public String projectFile = DEFAULT_PROJECT_FILE;
         public String buildSystem = BUILD_SYSTEM_IDE;
     }
 
-    private SettingsState state = new SettingsState();
+    private SettingsState state = currentDefaults();
 
     public static @NotNull PapyrusProjectSettings getInstance(@NotNull Project project) {
         return project.getService(PapyrusProjectSettings.class);
@@ -60,6 +64,10 @@ public final class PapyrusProjectSettings implements PersistentStateComponent<Pa
 
     @Override
     public void loadState(@NotNull SettingsState state) {
+        if (!PapyrusPluginVersion.CURRENT.equals(state.pluginVersion)) {
+            this.state = currentDefaults();
+            return;
+        }
         if (state.gameId == null || state.gameId.isBlank()) {
             state.gameId = SKYRIM_SE_GAME_ID;
         }
@@ -71,6 +79,13 @@ public final class PapyrusProjectSettings implements PersistentStateComponent<Pa
             // to the product-neutral IDE default without changing user-visible behavior.
             state.buildSystem = BUILD_SYSTEM_IDE;
         }
+        state.pluginVersion = PapyrusPluginVersion.CURRENT;
         this.state = state;
+    }
+
+    private static @NotNull SettingsState currentDefaults() {
+        SettingsState defaults = new SettingsState();
+        defaults.pluginVersion = PapyrusPluginVersion.CURRENT;
+        return defaults;
     }
 }

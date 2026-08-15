@@ -1,5 +1,6 @@
 package dev.papyrus.jetbrains.plugin;
 
+import dev.papyrus.jetbrains.PapyrusPluginVersion;
 import org.junit.jupiter.api.Test;
 import org.w3c.dom.Document;
 
@@ -9,6 +10,7 @@ import java.io.InputStreamReader;
 import java.nio.charset.StandardCharsets;
 import java.util.Properties;
 
+import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertTrue;
@@ -22,6 +24,10 @@ final class PluginDescriptorBehaviorTest {
             Document document = DocumentBuilderFactory.newInstance().newDocumentBuilder().parse(input);
             String xml = document.getDocumentElement().getTextContent();
 
+            assertEquals(
+                    PapyrusPluginVersion.CURRENT,
+                    document.getElementsByTagName("version").item(0).getTextContent().trim()
+            );
             assertTrue(hasAction(document, "Papyrus.SearchCreationKitWiki"));
             assertTrue(hasAction(document, "Papyrus.ViewAssembly"));
             assertTrue(hasAction(document, "Papyrus.GenerateSkyrimProject"));

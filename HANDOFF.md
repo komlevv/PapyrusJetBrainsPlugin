@@ -1,4 +1,4 @@
-# Papyrus JetBrains Plugin handoff — 0.2.166 source
+# Papyrus JetBrains Plugin handoff — 0.2.168 source
 
 > Documentation boundary: `README.md` is the public/user-facing GitHub landing page. Version-by-version history, regression notes, test gates, inspection/lint details, local build paths, offline dependency layout, implementation notes, and other maintainer-only operational context belong here or in the dedicated living technical documents, not in `README.md`.
 
@@ -13,6 +13,11 @@
 Target runtime/test IDE: **CLion 2026.2.x / IntelliJ Platform 262**. Verified installation: **CLion 2026.2.1 / CL-262.9437.136**.
 
 
+## 0.2.168 — versioned project-local `.idea` state
+
+Project-local Papyrus state in `.idea/papyrus.xml` now carries the exact plugin version. Missing or mismatched versions are rejected before their values are used, so old build-system/project-file settings and managed-import metadata cannot leak into a newer plugin build. The import-library service remembers the previously owned module/library identity only long enough to remove that stale managed library asynchronously when Papyrus Projects initializes; any later synchronization recreates it only from fresh project information. Newly generated projects write the current version marker. The DIRTY status no longer shows the explanatory Ctrl+S/unsaved-buffer sentence.
+
+
 ## 0.2.166 — line-separator-safe editor-buffer UI tests
 
 - `PapyrusUiTestSupport.replaceDocument(...)` and `replaceDocumentRange(...)` now normalize incoming text to the IntelliJ `Document` LF-only representation before calling `Document.replaceString(...)`.
@@ -22,7 +27,7 @@ Target runtime/test IDE: **CLion 2026.2.x / IntelliJ Platform 262**. Verified in
 
 ## 0.2.165 — unsaved PPJ Refresh
 
-Projects Refresh now captures unsaved `.ppj` editor `Document` text under a read action and validates/materializes that exact in-memory image. It never force-saves the PPJ. Unsaved PPJ edits mark Projects `DIRTY` immediately through the existing document listener bridge; native PPJ LSP synchronization remains disabled. A later Ctrl+S for an already-applied buffer is ignored as a duplicate dirty signal, while external/non-editor PPJ VFS changes still mark the configuration dirty. The immutable validated workspace still provides the TOCTOU and cold-start boundary. Expected gate: **76 UNIT + 20 PAPYRUS-LANG + 48 REAL CLION UI**.
+Projects Refresh now captures unsaved `.ppj` editor `Document` text under a read action and validates/materializes that exact in-memory image. It never force-saves the PPJ. Unsaved PPJ edits mark Projects `DIRTY` immediately through the existing document listener bridge; native PPJ LSP synchronization remains disabled. A later Ctrl+S for an already-applied buffer is ignored as a duplicate dirty signal, while external/non-editor PPJ VFS changes still mark the configuration dirty. The immutable validated workspace still provides the TOCTOU and cold-start boundary. Expected gate: **78 UNIT + 20 PAPYRUS-LANG + 48 REAL CLION UI**.
 
 ## 0.2.164 — Projects Refresh busy state
 
@@ -30,7 +35,7 @@ The Projects `Refresh` button now switches immediately to a native disabled `Ref
 
 ## Current source state
 
-- Current source version: **0.2.166**.
+- Current source version: **0.2.168**.
 - 0.2.126 is the all-24 inspection cleanup. It does not add a Papyrus feature; it refactors plugin-owned warnings, updates deprecated/DevKit APIs, adds descriptor/live-template i18n, and documents every submitted screenshot in `INSPECTION_AUDIT.md`. Vendor/generated artifacts remain untouched.
 - Latest user-confirmed green Windows gate: **0.2.164 — 75/75 UNIT, 20/20 PAPYRUS-LANG, 48/48 REAL CLION UI**.
 - Hardened semantic **Refactor | Rename** is VERIFIED at the 0.2.112 baseline.

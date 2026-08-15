@@ -1,5 +1,6 @@
 package dev.papyrus.jetbrains.actions;
 
+import dev.papyrus.jetbrains.PapyrusPluginVersion;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
 
@@ -39,6 +40,7 @@ final class PapyrusProjectGeneratorBehaviorTest {
         assertTrue(Files.readString(generated.resolve("skyrimse.ppj")).contains("Game &amp; Tools"));
         String projectSettings = Files.readString(generated.resolve(".idea/papyrus.xml"));
         assertTrue(projectSettings.contains("dev.papyrus.intellij.config.PapyrusProjectSettings"));
+        assertTrue(projectSettings.contains("pluginVersion\" value=\"" + PapyrusPluginVersion.CURRENT));
         assertTrue(projectSettings.contains("gameId\" value=\"skyrimSpecialEdition"));
         assertTrue(projectSettings.contains("projectFile\" value=\"skyrimse.ppj"));
         assertTrue(projectSettings.contains("buildSystem\" value=\"papyrus"));

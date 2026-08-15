@@ -1,12 +1,15 @@
 package dev.papyrus.jetbrains.projects;
 
+import com.intellij.openapi.project.Project;
 import com.intellij.openapi.roots.OrderRootType;
+import dev.papyrus.jetbrains.PapyrusPluginVersion;
 import dev.papyrus.jetbrains.protocol.ProjectInfo;
 import dev.papyrus.jetbrains.protocol.ProjectInfoSourceInclude;
 import dev.papyrus.jetbrains.protocol.ProjectInfos;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
 
+import java.lang.reflect.Proxy;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.List;
@@ -79,6 +82,35 @@ final class PapyrusImportLibraryServiceTest {
                 List.of("Data: Scripts", "racemenu: scripts"),
                 labels.values().stream().sorted(String.CASE_INSENSITIVE_ORDER).toList()
         );
+    }
+
+    @Test
+    void staleManagedLibraryStateIsNotReused() {
+        Project project = (Project) Proxy.newProxyInstance(
+                Project.class.getClassLoader(),
+                new Class<?>[]{Project.class},
+                (proxy, method, args) -> null
+        );
+        PapyrusImportLibraryService service = new PapyrusImportLibraryService(project);
+        PapyrusImportLibraryService.SettingsState stale = new PapyrusImportLibraryService.SettingsState();
+        stale.pluginVersion = "0.0.0-stale";
+        stale.managedModuleName = "OldModule";
+        stale.managedLibraryName = "Papyrus Imports";
+
+        service.loadState(stale);
+
+        assertEquals(PapyrusPluginVersion.CURRENT, service.getState().pluginVersion);
+        assertEquals("", service.getState().managedModuleName);
+        assertEquals("", service.getState().managedLibraryName);
+
+        PapyrusImportLibraryService.SettingsState current = new PapyrusImportLibraryService.SettingsState();
+        current.pluginVersion = PapyrusPluginVersion.CURRENT;
+        current.managedModuleName = "CurrentModule";
+        current.managedLibraryName = "Papyrus Imports";
+        service.loadState(current);
+
+        assertEquals("CurrentModule", service.getState().managedModuleName);
+        assertEquals("Papyrus Imports", service.getState().managedLibraryName);
     }
 
     private static ProjectInfoSourceInclude include(

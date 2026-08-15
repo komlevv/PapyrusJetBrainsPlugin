@@ -24,6 +24,7 @@ import com.intellij.openapi.util.SystemInfo;
 import com.intellij.openapi.vfs.LocalFileSystem;
 import com.intellij.openapi.vfs.VfsUtilCore;
 import com.intellij.openapi.vfs.VirtualFile;
+import dev.papyrus.jetbrains.PapyrusPluginVersion;
 import dev.papyrus.jetbrains.protocol.ProjectInfo;
 import dev.papyrus.jetbrains.protocol.ProjectInfoSourceInclude;
 import dev.papyrus.jetbrains.protocol.ProjectInfos;
@@ -65,6 +66,8 @@ public final class PapyrusImportLibraryService
     private static final String FALLBACK_LIBRARY_NAME = "Papyrus Imports (Papyrus Language)";
 
     public static final class SettingsState {
+        // Empty is intentional so legacy .idea/papyrus.xml state is rejected on load.
+        public String pluginVersion = "";
         public String managedModuleName = "";
         public String managedLibraryName = "";
     }
@@ -73,7 +76,8 @@ public final class PapyrusImportLibraryService
     private final Object generationLock = new Object();
     private final Object syncExecutionLock = new Object();
     private long requestedGeneration;
-    private volatile SettingsState state = new SettingsState();
+    private volatile SettingsState state = currentDefaults();
+    private volatile ManagedLibrary staleManagedLibrary;
     private volatile List<String> currentImportRoots = List.of();
     private volatile Map<String, String> currentImportLabels = Map.of();
 
@@ -92,13 +96,30 @@ public final class PapyrusImportLibraryService
 
     @Override
     public void loadState(@NotNull SettingsState state) {
+        if (!PapyrusPluginVersion.CURRENT.equals(state.pluginVersion)) {
+            if (state.managedModuleName != null && !state.managedModuleName.isBlank()
+                    && state.managedLibraryName != null && !state.managedLibraryName.isBlank()) {
+                staleManagedLibrary = new ManagedLibrary(state.managedModuleName, state.managedLibraryName);
+            }
+            this.state = currentDefaults();
+            currentImportRoots = List.of();
+            currentImportLabels = Map.of();
+            return;
+        }
         if (state.managedModuleName == null) {
             state.managedModuleName = "";
         }
         if (state.managedLibraryName == null) {
             state.managedLibraryName = "";
         }
+        state.pluginVersion = PapyrusPluginVersion.CURRENT;
         this.state = state;
+    }
+
+    public void discardStaleManagedLibraryAsync() {
+        if (staleManagedLibrary != null) {
+            clearAsync();
+        }
     }
 
     public void clearAsync() {
@@ -153,6 +174,12 @@ public final class PapyrusImportLibraryService
     }
 
     private void syncNow(@NotNull ImportCollection imports, @NotNull ProjectInfos infos) {
+        ManagedLibrary stale = staleManagedLibrary;
+        if (stale != null) {
+            removeManagedLibrary(stale);
+            staleManagedLibrary = null;
+        }
+
         List<String> desiredRoots = imports.roots();
         currentImportRoots = List.copyOf(desiredRoots);
         currentImportLabels = Map.copyOf(imports.labelsByPathKey());
@@ -335,14 +362,20 @@ public final class PapyrusImportLibraryService
     }
 
     private void writeManagedState(@NotNull ManagedLibrary managed) {
-        SettingsState newState = new SettingsState();
+        SettingsState newState = currentDefaults();
         newState.managedModuleName = managed.moduleName();
         newState.managedLibraryName = managed.libraryName();
         state = newState;
     }
 
     private void clearManagedState() {
-        state = new SettingsState();
+        state = currentDefaults();
+    }
+
+    private static @NotNull SettingsState currentDefaults() {
+        SettingsState defaults = new SettingsState();
+        defaults.pluginVersion = PapyrusPluginVersion.CURRENT;
+        return defaults;
     }
 
     private static @Nullable VirtualFile findDirectory(@NotNull String path) {

@@ -1,5 +1,7 @@
 package dev.papyrus.jetbrains.actions;
 
+import dev.papyrus.jetbrains.PapyrusPluginVersion;
+
 import java.io.IOException;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
@@ -17,12 +19,13 @@ final class PapyrusProjectGenerator {
     private static final String IDE_PROJECT_SETTINGS_XML = """
             <project version="4">
               <component name="dev.papyrus.intellij.config.PapyrusProjectSettings">
+                <option name="pluginVersion" value="%s" />
                 <option name="gameId" value="skyrimSpecialEdition" />
                 <option name="projectFile" value="skyrimse.ppj" />
                 <option name="buildSystem" value="papyrus" />
               </component>
             </project>
-            """;
+            """.formatted(PapyrusPluginVersion.CURRENT);
 
     private static final String ATTACH_RUN_CONFIGURATION_XML = """
             <component name="ProjectRunConfigurationManager">
