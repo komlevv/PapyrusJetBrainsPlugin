@@ -1,7 +1,6 @@
 > **Status: ALPHA** — active development; behavior and packaging may still change before the first stable release.
 > **Target IDE:** CLion **2026.2.x** on IntelliJ Platform **262**. Verified target: **CLion 2026.2.1 / CL-262.9437.136**.
 > **Platform:** Windows.
-> **Current source:** **0.2.169**. Papyrus projects are now detected and initialized at IDE project startup when project-local `.ppj` or `.psc` files are present; opening a script is no longer required to start Papyrus Projects/import synchronization/LSP. Unrelated projects are left untouched.
 
 # Papyrus Language Support for JetBrains CLion 
 

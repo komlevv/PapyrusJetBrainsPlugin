@@ -26,6 +26,7 @@ public final class PapyrusBundledVsix {
 
     private static final String RESOURCE_PATH = "/papyrus/vendor/" + VERSION + "/papyrus-lang-vscode.vsix";
     private static final String READY_MARKER = ".papyrus-vsix-ready";
+    private static final String TEXTMATE_COMPATIBILITY_MARKER = ".papyrus-jetbrains-textmate-v1";
     private static volatile Path cachedExtensionRoot;
 
     private PapyrusBundledVsix() {
@@ -101,8 +102,11 @@ public final class PapyrusBundledVsix {
             Files.createDirectory(extracted);
             unzipSafely(archiveFile, extracted);
             Files.createDirectories(extracted.resolve("extension/pyro/remote"));
-            requireExtensionLayout(extracted.resolve("extension"));
+            Path extensionRoot = extracted.resolve("extension");
+            requireExtensionLayout(extensionRoot);
+            patchPapyrusTextMateGrammar(extensionRoot);
             Files.writeString(extracted.resolve(READY_MARKER), expectedSha256);
+            Files.writeString(extracted.resolve(TEXTMATE_COMPATIBILITY_MARKER), "parameter-leading-comma-v1");
 
             if (isReady(target)) {
                 return;
@@ -157,6 +161,7 @@ public final class PapyrusBundledVsix {
     private static boolean isReady(Path target) {
         return target != null
                 && Files.isRegularFile(target.resolve(READY_MARKER))
+                && Files.isRegularFile(target.resolve(TEXTMATE_COMPATIBILITY_MARKER))
                 && Files.isRegularFile(target.resolve("extension/package.json"))
                 && Files.isRegularFile(target.resolve(
                         "extension/bin/Debug/net472/DarkId.Papyrus.Host.Skyrim/DarkId.Papyrus.Host.Skyrim.exe"
@@ -176,6 +181,39 @@ public final class PapyrusBundledVsix {
         if (!Files.isDirectory(extensionRoot.resolve("pyro/remote"))) {
             throw new IllegalStateException("Bundled Papyrus remotes directory is missing: " + extensionRoot);
         }
+        if (!Files.isRegularFile(extensionRoot.resolve("syntaxes/papyrus/papyrus.tmLanguage"))) {
+            throw new IllegalStateException("Bundled Papyrus TextMate grammar is missing: " + extensionRoot);
+        }
+    }
+
+    private static void patchPapyrusTextMateGrammar(Path extensionRoot) throws IOException {
+        Path grammar = extensionRoot.resolve("syntaxes/papyrus/papyrus.tmLanguage");
+        String source = Files.readString(grammar).replace("\r\n", "\n");
+        String matchElement = "<string>\\G\\s*,</string>";
+        int first = source.indexOf(matchElement);
+        if (first < 0 || source.indexOf(matchElement, first + matchElement.length()) >= 0) {
+            throw new IOException("Unexpected pinned Papyrus TextMate parameter-comma rule; JetBrains compatibility patch was not applied");
+        }
+
+        int lineStart = source.lastIndexOf('\n', first) + 1;
+        String indent = source.substring(lineStart, first);
+        String upstream = matchElement + "\n"
+                + indent + "<key>name</key>\n"
+                + indent + "<string>invalid.illegal.function.papyrus</string>";
+        if (!source.startsWith(upstream, first)) {
+            throw new IOException("Unexpected pinned Papyrus TextMate parameter-comma scope; JetBrains compatibility patch was not applied");
+        }
+
+        String jetBrains = "<string>(?&lt;=\\()\\s*(,)</string>\n"
+                + indent + "<key>captures</key>\n"
+                + indent + "<dict>\n"
+                + indent + "    <key>1</key>\n"
+                + indent + "    <dict>\n"
+                + indent + "        <key>name</key>\n"
+                + indent + "        <string>invalid.illegal.function.papyrus</string>\n"
+                + indent + "    </dict>\n"
+                + indent + "</dict>";
+        Files.writeString(grammar, source.substring(0, first) + jetBrains + source.substring(first + upstream.length()));
     }
 
     private static void moveDirectory(Path source, Path target) throws IOException {

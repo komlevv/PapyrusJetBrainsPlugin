@@ -1,4 +1,4 @@
-# Papyrus JetBrains Plugin handoff — 0.2.169 source
+# Papyrus JetBrains Plugin handoff — 0.2.170 source
 
 > Documentation boundary: `README.md` is the public/user-facing GitHub landing page. Version-by-version history, regression notes, test gates, inspection/lint details, local build paths, offline dependency layout, implementation notes, and other maintainer-only operational context belong here or in the dedicated living technical documents, not in `README.md`.
 
@@ -13,6 +13,15 @@
 Target runtime/test IDE: **CLion 2026.2.x / IntelliJ Platform 262**. Verified installation: **CLion 2026.2.1 / CL-262.9437.136**.
 
 
+
+
+## 0.2.170 — JetBrains TextMate parameter-comma compatibility
+
+- The upstream grammar rule `parameter-comma-at-start` uses `\G`, which JetBrains TextMate can apply to valid separator commas.
+- The extracted pinned VSIX is patched in the plugin system cache so only a comma immediately after the opening `(` (allowing whitespace) receives `invalid.illegal.function.papyrus`.
+- Valid separators such as `Function Foo(Int a, FormList b)` retain normal parameter scopes.
+- A compatibility marker forces existing 0.2.169 vendor caches to be re-extracted and patched once.
+- Real CLion UI coverage checks both the valid separator and the invalid leading-comma cases.
 
 ## 0.2.169 — project-startup Papyrus detection
 
@@ -46,9 +55,9 @@ The Projects `Refresh` button now switches immediately to a native disabled `Ref
 
 ## Current source state
 
-- Current source version: **0.2.169**.
+- Current source version: **0.2.170**.
 - 0.2.126 is the all-24 inspection cleanup. It does not add a Papyrus feature; it refactors plugin-owned warnings, updates deprecated/DevKit APIs, adds descriptor/live-template i18n, and documents every submitted screenshot in `INSPECTION_AUDIT.md`. Vendor/generated artifacts remain untouched.
-- Latest user-confirmed green Windows gate: **0.2.168 — 78/78 UNIT, 20/20 PAPYRUS-LANG, 48/48 REAL CLION UI**.
+- Latest user-confirmed green Windows gate: **0.2.169 — 81/81 UNIT, 20/20 PAPYRUS-LANG, 48/48 REAL CLION UI**.
 - Hardened semantic **Refactor | Rename** is VERIFIED at the 0.2.112 baseline.
 - The broad non-debugger port/parity burn-down is complete and verified in 0.2.138: Stage 1 covers semantic Completion/Definition/References edges, Stage 2 real-IDE Syntax Tree/document sync/diagnostics, Stage 3 Project Infos/script status, and Stage 4 safe Pyro task discovery/compiler-output navigation. Debugger is explicitly deferred.
 - Bounded **Compile Project**, the executable `PapyrusProject` IDE Run Configuration, and project-level opt-in Build Project are VERIFIED. 0.2.124 keeps the active runtime/test target on CLion and replaces the Java-only New Project language generator with `DirectoryProjectGenerator`.

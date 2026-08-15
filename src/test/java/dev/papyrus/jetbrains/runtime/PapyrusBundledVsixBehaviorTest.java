@@ -14,6 +14,7 @@ import java.util.zip.ZipEntry;
 import java.util.zip.ZipOutputStream;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
@@ -30,7 +31,8 @@ final class PapyrusBundledVsixBehaviorTest {
                 entry(
                         "extension/bin/Debug/net472/DarkId.Papyrus.Host.Skyrim/DarkId.Papyrus.Host.Skyrim.exe",
                         "host"
-                )
+                ),
+                entry("extension/syntaxes/papyrus/papyrus.tmLanguage", upstreamGrammar())
         );
         String sha256 = sha256(archive);
 
@@ -51,6 +53,31 @@ final class PapyrusBundledVsixBehaviorTest {
     }
 
     @Test
+    void patchesLeadingParameterCommaWithoutMarkingValidSeparatorsIllegal() throws Exception {
+        byte[] archive = zip(
+                entry("extension/package.json", "{}"),
+                entry(
+                        "extension/bin/Debug/net472/DarkId.Papyrus.Host.Skyrim/DarkId.Papyrus.Host.Skyrim.exe",
+                        "host"
+                ),
+                entry("extension/syntaxes/papyrus/papyrus.tmLanguage", upstreamGrammar())
+        );
+        String sha256 = sha256(archive);
+
+        Path extensionRoot = PapyrusBundledVsix.extractArchiveForTests(
+                new ByteArrayInputStream(archive),
+                temp,
+                sha256
+        );
+
+        String grammar = Files.readString(extensionRoot.resolve("syntaxes/papyrus/papyrus.tmLanguage"));
+        assertTrue(grammar.contains("<string>(?&lt;=\\()\\s*(,)</string>"));
+        assertTrue(grammar.contains("<key>captures</key>"));
+        assertTrue(grammar.contains("<string>invalid.illegal.function.papyrus</string>"));
+        assertFalse(grammar.contains("<string>\\G\\s*,</string>"));
+    }
+
+    @Test
     void rejectsArchiveEntriesThatEscapeTheVendorCache() throws Exception {
         byte[] archive = zip(entry("../outside.txt", "unsafe"));
 
@@ -63,6 +90,20 @@ final class PapyrusBundledVsixBehaviorTest {
                 )
         );
         assertTrue(Files.notExists(temp.getParent().resolve("outside.txt")));
+    }
+
+    private static String upstreamGrammar() {
+        return """
+                <plist>
+                    <key>parameter-comma-at-start</key>
+                    <dict>
+                        <key>match</key>
+                        <string>\\G\\s*,</string>
+                        <key>name</key>
+                        <string>invalid.illegal.function.papyrus</string>
+                    </dict>
+                </plist>
+                """;
     }
 
     private static Entry entry(String name, String content) {

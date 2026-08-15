@@ -496,20 +496,55 @@ internal class PapyrusEditorFeaturesUiTest {
     @Order(11)
     fun textMateHighlightsRepresentativePapyrusScopes() {
         val editor = open(fixture.ergonomics)
-        val text = editor.getDocument().getText()
-        val probes = linkedMapOf(
-            "; line comment" to "comment.line.semicolon.papyrus",
-            "hello" to "string.quoted.double.papyrus",
-            "Int Count" to "storage.type.papyrus",
-            "42" to "constant.numeric.integer.papyrus",
-            "If Count" to "keyword.control.flow.papyrus",
-        )
-        for ((needle, scope) in probes) {
-            val offset = text.indexOf(needle)
-            assertTrue(offset >= 0, "Missing highlighting fixture token: $needle")
-            ide.waitFor("TextMate scope $scope", SHORT) {
-                tokenScopeAt(editor, offset).contains(scope)
+        try {
+            val text = editor.getDocument().getText()
+            val probes = linkedMapOf(
+                "; line comment" to "comment.line.semicolon.papyrus",
+                "hello" to "string.quoted.double.papyrus",
+                "Int Count" to "storage.type.papyrus",
+                "42" to "constant.numeric.integer.papyrus",
+                "If Count" to "keyword.control.flow.papyrus",
+            )
+            for ((needle, scope) in probes) {
+                val offset = text.indexOf(needle)
+                assertTrue(offset >= 0, "Missing highlighting fixture token: $needle")
+                ide.waitFor("TextMate scope $scope", SHORT) {
+                    tokenScopeAt(editor, offset).contains(scope)
+                }
             }
+
+            val parameterText = """
+                Scriptname TextMateParameterCommaProbe extends Quest
+
+                Function Valid(Int element, FormList hpList, Race suppliedRace)
+                EndFunction
+
+                Function Invalid(, Int element)
+                EndFunction
+            """.trimIndent() + "\n"
+            replaceDocument(editor, parameterText)
+
+            val current = editor.getDocument().getText()
+            val validComma = current.indexOf(", FormList")
+            val validParameterType = current.indexOf("FormList hpList")
+            val invalidSignature = current.indexOf("Invalid(,")
+            assertTrue(validComma >= 0, "Missing valid parameter separator comma")
+            assertTrue(validParameterType >= 0, "Missing valid second parameter")
+            assertTrue(invalidSignature >= 0, "Missing invalid leading parameter comma")
+            val invalidComma = invalidSignature + "Invalid(".length
+
+            ide.waitFor("valid comma parameter TextMate scope", SHORT) {
+                tokenScopeAt(editor, validParameterType).contains("storage.type.variable.papyrus")
+            }
+            assertFalse(
+                tokenScopeAt(editor, validComma).contains("invalid.illegal.function.papyrus"),
+                "A valid parameter separator comma must not be highlighted as illegal",
+            )
+            ide.waitFor("invalid leading parameter comma TextMate scope", SHORT) {
+                tokenScopeAt(editor, invalidComma).contains("invalid.illegal.function.papyrus")
+            }
+        } finally {
+            restoreErgonomics(editor)
         }
     }
 
