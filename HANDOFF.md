@@ -1,4 +1,4 @@
-# Papyrus JetBrains Plugin handoff — 0.2.164 source
+# Papyrus JetBrains Plugin handoff — 0.2.166 source
 
 > Documentation boundary: `README.md` is the public/user-facing GitHub landing page. Version-by-version history, regression notes, test gates, inspection/lint details, local build paths, offline dependency layout, implementation notes, and other maintainer-only operational context belong here or in the dedicated living technical documents, not in `README.md`.
 
@@ -13,15 +13,26 @@
 Target runtime/test IDE: **CLion 2026.2.x / IntelliJ Platform 262**. Verified installation: **CLion 2026.2.1 / CL-262.9437.136**.
 
 
+## 0.2.166 — line-separator-safe editor-buffer UI tests
+
+- `PapyrusUiTestSupport.replaceDocument(...)` and `replaceDocumentRange(...)` now normalize incoming text to the IntelliJ `Document` LF-only representation before calling `Document.replaceString(...)`.
+- This fixes the real-CLion PPJ buffer test when the fixture file is stored with Windows CRLF line endings.
+- Range-replacement caret positioning now uses the normalized text length.
+- Production PPJ editor-buffer Refresh behavior is unchanged from 0.2.165.
+
+## 0.2.165 — unsaved PPJ Refresh
+
+Projects Refresh now captures unsaved `.ppj` editor `Document` text under a read action and validates/materializes that exact in-memory image. It never force-saves the PPJ. Unsaved PPJ edits mark Projects `DIRTY` immediately through the existing document listener bridge; native PPJ LSP synchronization remains disabled. A later Ctrl+S for an already-applied buffer is ignored as a duplicate dirty signal, while external/non-editor PPJ VFS changes still mark the configuration dirty. The immutable validated workspace still provides the TOCTOU and cold-start boundary. Expected gate: **76 UNIT + 20 PAPYRUS-LANG + 48 REAL CLION UI**.
+
 ## 0.2.164 — Projects Refresh busy state
 
 The Projects `Refresh` button now switches immediately to a native disabled `Refreshing...` state on click and stays disabled through `VALIDATING`, `RELOADING`, and `SYNCHRONIZING`. The label returns to `Refresh` on success or any terminal validation/server error. The button reserves enough width for both labels so the toolbar does not jump. This is UI feedback only; `PapyrusProjectsService.reloadFromProjectFilesAsync()` already rejects duplicate reload requests under `refreshLock`, so programmatic or pre-listener duplicate invocations remain fail-closed.
 
 ## Current source state
 
-- Current source version: **0.2.164**.
+- Current source version: **0.2.166**.
 - 0.2.126 is the all-24 inspection cleanup. It does not add a Papyrus feature; it refactors plugin-owned warnings, updates deprecated/DevKit APIs, adds descriptor/live-template i18n, and documents every submitted screenshot in `INSPECTION_AUDIT.md`. Vendor/generated artifacts remain untouched.
-- Latest user-confirmed green Windows gate: **0.2.163 — 75/75 UNIT, 20/20 PAPYRUS-LANG, 48/48 REAL CLION UI**.
+- Latest user-confirmed green Windows gate: **0.2.164 — 75/75 UNIT, 20/20 PAPYRUS-LANG, 48/48 REAL CLION UI**.
 - Hardened semantic **Refactor | Rename** is VERIFIED at the 0.2.112 baseline.
 - The broad non-debugger port/parity burn-down is complete and verified in 0.2.138: Stage 1 covers semantic Completion/Definition/References edges, Stage 2 real-IDE Syntax Tree/document sync/diagnostics, Stage 3 Project Infos/script status, and Stage 4 safe Pyro task discovery/compiler-output navigation. Debugger is explicitly deferred.
 - Bounded **Compile Project**, the executable `PapyrusProject` IDE Run Configuration, and project-level opt-in Build Project are VERIFIED. 0.2.124 keeps the active runtime/test target on CLion and replaces the Java-only New Project language generator with `DirectoryProjectGenerator`.

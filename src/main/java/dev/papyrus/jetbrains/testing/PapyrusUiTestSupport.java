@@ -29,6 +29,7 @@ import com.intellij.execution.ProgramRunnerUtil;
 import com.intellij.execution.RunManager;
 import com.intellij.execution.configurations.ConfigurationTypeUtil;
 import com.intellij.openapi.project.Project;
+import com.intellij.openapi.util.text.StringUtil;
 import com.intellij.openapi.module.Module;
 import com.intellij.openapi.module.ModuleManager;
 import com.intellij.openapi.roots.LibraryOrderEntry;
@@ -115,11 +116,12 @@ public final class PapyrusUiTestSupport {
 
     public static void replaceDocument(Project project, Editor editor, String text) {
         requireEnabled();
+        String documentText = StringUtil.convertLineSeparators(text);
         WriteCommandAction.writeCommandAction(project)
                 .withName("Papyrus UI Test Document Replacement")
                 .run(() -> {
                     Document document = editor.getDocument();
-                    document.replaceString(0, document.getTextLength(), text);
+                    document.replaceString(0, document.getTextLength(), documentText);
                     editor.getCaretModel().moveToOffset(0);
                     editor.getSelectionModel().removeSelection();
                 });
@@ -133,6 +135,7 @@ public final class PapyrusUiTestSupport {
             String text
     ) {
         requireEnabled();
+        String documentText = StringUtil.convertLineSeparators(text);
         WriteCommandAction.writeCommandAction(project)
                 .withName("Papyrus UI Test Document Range Replacement")
                 .run(() -> {
@@ -143,8 +146,10 @@ public final class PapyrusUiTestSupport {
                                         + " for length " + document.getTextLength()
                         );
                     }
-                    document.replaceString(startOffset, endOffset, text);
-                    editor.getCaretModel().moveToOffset(Math.min(startOffset + text.length(), document.getTextLength()));
+                    document.replaceString(startOffset, endOffset, documentText);
+                    editor.getCaretModel().moveToOffset(
+                            Math.min(startOffset + documentText.length(), document.getTextLength())
+                    );
                     editor.getSelectionModel().removeSelection();
                 });
     }

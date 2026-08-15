@@ -110,7 +110,12 @@ public final class PapyrusWorkspaceFileWatcher implements Disposable {
             recordRelevantEvent(event, path);
         }
         if ("ppj".equals(extension)) {
-            notifyPpjDirty(path);
+            // Editor Document changes already mark PPJs dirty before Ctrl+S. The subsequent VFS
+            // save event represents the same edit and must not advance the editable revision again;
+            // otherwise saving an already-applied in-memory Refresh would incorrectly make it DIRTY.
+            if (!(event instanceof VFileContentChangeEvent) || !event.isFromSave()) {
+                notifyPpjDirty(path);
+            }
             return false;
         }
 

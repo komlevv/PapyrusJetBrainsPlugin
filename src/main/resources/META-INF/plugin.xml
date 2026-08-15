@@ -1,7 +1,7 @@
 <idea-plugin>
     <id>dev.papyrus.intellij-papyrus</id>
     <name>Papyrus Language</name>
-    <version>0.2.164</version>
+    <version>0.2.167</version>
 
     <vendor>Local</vendor>
     <resource-bundle>messages.PapyrusBundle</resource-bundle>

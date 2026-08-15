@@ -13,6 +13,7 @@ import com.intellij.openapi.vfs.VirtualFile;
 import com.intellij.platform.lsp.api.LspClient;
 import com.intellij.platform.lsp.api.LspClientManager;
 import com.intellij.platform.lsp.api.LspServerState;
+import dev.papyrus.jetbrains.projects.PapyrusProjectsService;
 import kotlin.Unit;
 import org.eclipse.lsp4j.DidChangeTextDocumentParams;
 import org.eclipse.lsp4j.Position;
@@ -21,6 +22,7 @@ import org.eclipse.lsp4j.TextDocumentContentChangeEvent;
 import org.eclipse.lsp4j.VersionedTextDocumentIdentifier;
 import org.jetbrains.annotations.NotNull;
 
+import java.nio.file.Path;
 import java.util.List;
 
 /**
@@ -50,9 +52,31 @@ public final class PapyrusDocumentSyncCompatibility implements Disposable {
         EditorFactory.getInstance().getEventMulticaster().addDocumentListener(new DocumentListener() {
             @Override
             public void beforeDocumentChange(@NotNull DocumentEvent event) {
-                forwardChange(event);
+                if (!markEditableProjectDirty(event.getDocument())) {
+                    forwardChange(event);
+                }
             }
         }, this);
+    }
+
+    /**
+     * PPJ files are deliberately excluded from native LSP document synchronization. Still listen to
+     * their editor documents so an unsaved keystroke immediately marks the editable configuration
+     * dirty. Refresh will later capture the complete current Document text and validate that exact
+     * in-memory state.
+     */
+    private boolean markEditableProjectDirty(@NotNull Document document) {
+        if (project.isDisposed()) {
+            return false;
+        }
+
+        VirtualFile file = FileDocumentManager.getInstance().getFile(document);
+        if (file == null || !isPpjFile(file) || !ProjectFileIndex.getInstance(project).isInContent(file)) {
+            return false;
+        }
+
+        PapyrusProjectsService.getInstance(project).projectFileChanged(Path.of(file.getPath()));
+        return true;
     }
 
     private void forwardChange(@NotNull DocumentEvent event) {
@@ -109,6 +133,10 @@ public final class PapyrusDocumentSyncCompatibility implements Disposable {
     private static boolean isPapyrusFile(@NotNull VirtualFile file) {
         String extension = file.getExtension();
         return "psc".equalsIgnoreCase(extension);
+    }
+
+    private static boolean isPpjFile(@NotNull VirtualFile file) {
+        return "ppj".equalsIgnoreCase(file.getExtension());
     }
 
     @Override

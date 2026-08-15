@@ -1969,6 +1969,59 @@ internal class PapyrusEditorFeaturesUiTest {
         val targetPath = fixture.target.toRealPath().toString()
 
         try {
+            // Refresh must consume the live editor buffer, not require Ctrl+S first. Keep the disk
+            // file unchanged, make the open Document invalid, and prove validation sees only the
+            // unsaved text.
+            val projectEditor = open(projectFile)
+            replaceDocument(projectEditor, invalid)
+            ide.waitFor("dirty PPJ state after unsaved editor edit", NORMAL) {
+                support.papyrusProjectsStatusPhase(ide.project) == "DIRTY"
+            }
+            assertEquals(
+                original,
+                Files.readString(projectFile),
+                "Editing runtime.ppj in the IDE unexpectedly saved it before Refresh",
+            )
+
+            support.reloadPapyrusProjects(ide.project)
+            ide.waitFor("unsaved PPJ validation failure", NORMAL) {
+                support.papyrusProjectsStatusPhase(ide.project) == "VALIDATION_ERROR" &&
+                    support.papyrusProjectsStatusSummary(ide.project) ==
+                    "PPJ validation failed: import directory does not exist"
+            }
+            assertTrue(
+                support.papyrusProjectsStatusDetails(ide.project).contains(invalidImport),
+                "Refresh ignored the unsaved PPJ editor buffer",
+            )
+            assertEquals(
+                original,
+                Files.readString(projectFile),
+                "Refreshing an unsaved PPJ must not force-save the editor document",
+            )
+
+            replaceDocument(projectEditor, original)
+            ide.waitFor("dirty PPJ state after unsaved editor repair", NORMAL) {
+                support.papyrusProjectsStatusPhase(ide.project) == "DIRTY"
+            }
+            support.reloadPapyrusProjects(ide.project)
+            ide.waitFor("unsaved PPJ recovery without Ctrl+S", 60.seconds) {
+                support.papyrusProjectsStatusPhase(ide.project) == "READY" &&
+                    support.papyrusProjectInfosContainsFile(ide.project, targetPath)
+            }
+            assertEquals(
+                original,
+                Files.readString(projectFile),
+                "Successful Refresh unexpectedly wrote the in-memory PPJ back to disk",
+            )
+
+            // Saving after an already-applied in-memory Refresh represents the same PPJ generation
+            // and must not make Projects dirty again.
+            support.saveAllDocuments()
+            ide.waitFor("PPJ remains ready after saving an already-applied editor buffer", NORMAL) {
+                support.papyrusProjectsStatusPhase(ide.project) == "READY"
+            }
+            closeSelectedFileIfNamed("runtime.ppj")
+
             val watcherRelevantBeforeInvalidEdit = support.papyrusWorkspaceFileWatcherRelevantEventCount(ide.project)
             support.createProjectTextFile(ide.project, "runtime.ppj", invalid)
             ide.waitFor("official VFS content event for invalid PPJ edit", NORMAL) {
@@ -2194,8 +2247,9 @@ internal class PapyrusEditorFeaturesUiTest {
         ide.utility<PapyrusUiTestSupportRemote>().tokenScopeAt(editor, offset)
 
     private fun replaceDocument(editor: EditorRemote, text: String) {
+        val expected = normalizeDocumentText(text)
         ide.utility<PapyrusUiTestSupportRemote>().replaceDocument(ide.project, editor, text)
-        ide.waitFor("document replacement", SHORT) { editor.getDocument().getText() == text }
+        ide.waitFor("document replacement", SHORT) { editor.getDocument().getText() == expected }
     }
 
     private fun replaceDocumentRange(editor: EditorRemote, startOffset: Int, endOffset: Int, text: String) {
@@ -2203,11 +2257,15 @@ internal class PapyrusEditorFeaturesUiTest {
         check(startOffset in 0..before.length && endOffset in startOffset..before.length) {
             "Invalid document range $startOffset..$endOffset for length ${before.length}"
         }
-        val expected = before.substring(0, startOffset) + text + before.substring(endOffset)
+        val replacement = normalizeDocumentText(text)
+        val expected = before.substring(0, startOffset) + replacement + before.substring(endOffset)
         ide.utility<PapyrusUiTestSupportRemote>()
             .replaceDocumentRange(ide.project, editor, startOffset, endOffset, text)
         ide.waitFor("document range replacement", SHORT) { editor.getDocument().getText() == expected }
     }
+
+    private fun normalizeDocumentText(text: String): String =
+        text.replace("\r\n", "\n").replace('\r', '\n')
 
     private data class EditorHighlight(
         val startOffset: Int,

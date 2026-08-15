@@ -137,24 +137,31 @@ public final class PapyrusProjectsService {
     }
 
     /**
-     * The editable PPJ is never exposed directly to papyrus-lang. A disk change only marks the real
-     * configuration dirty; Refresh must validate and publish a new immutable server snapshot.
+     * The editable PPJ is never exposed directly to papyrus-lang. An editor-buffer or disk change
+     * only marks the real configuration dirty; Refresh captures, validates, and publishes a new
+     * immutable server snapshot.
      */
     public void projectFileChanged(@NotNull Path projectFile) {
+        boolean notify;
+        Path normalized = projectFile.toAbsolutePath().normalize();
         synchronized (refreshLock) {
             // The editable PPJ revision is independent from the immutable server generation.
             // An in-flight source reload remains safe because it reads activeServerSnapshot.
             // A validation pass is different: it is reading the editable PPJ, so a newer edit must
             // invalidate that pass immediately instead of leaving the service stuck in VALIDATING.
-            if (status.phase() == Phase.VALIDATING) {
+            Phase previousPhase = status.phase();
+            if (previousPhase == Phase.VALIDATING) {
                 reloadGeneration++;
             }
             editableProjectRevision++;
-            lastChangedProjectFile = projectFile.toAbsolutePath().normalize();
+            notify = previousPhase != Phase.DIRTY || !normalized.equals(lastChangedProjectFile);
+            lastChangedProjectFile = normalized;
             configurationValidationError = null;
             status = withLastGood(dirtyStatus());
         }
-        notifyListeners();
+        if (notify) {
+            notifyListeners();
+        }
     }
 
     /**
@@ -593,8 +600,8 @@ public final class PapyrusProjectsService {
     private @NotNull Status dirtyStatus() {
         Path changed = lastChangedProjectFile;
         String details = changed != null
-                ? changed.toString()
-                : "The editable PPJ changed after the language server snapshot was prepared.";
+                ? changed + "\nRefresh uses the current unsaved editor contents when present; Ctrl+S is not required."
+                : "The editable PPJ changed after the language server snapshot was prepared.\nRefresh uses the current unsaved editor contents when present; Ctrl+S is not required.";
         return new Status(
                 Phase.DIRTY,
                 "Papyrus project file changed — click Refresh to validate and reload",

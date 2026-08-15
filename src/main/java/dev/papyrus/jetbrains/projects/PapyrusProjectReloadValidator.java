@@ -23,12 +23,9 @@ import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.InvalidPathException;
 import java.nio.file.Path;
-import java.security.MessageDigest;
-import java.security.NoSuchAlgorithmException;
 import java.util.ArrayDeque;
 import java.util.ArrayList;
 import java.util.Deque;
-import java.util.HexFormat;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
@@ -57,8 +54,21 @@ final class PapyrusProjectReloadValidator {
         }
 
         try {
-            byte[] projectBytes = Files.readAllBytes(absolute);
-            String fingerprint = fingerprint(projectBytes);
+            return validate(absolute, Files.readAllBytes(absolute));
+        } catch (IOException exception) {
+            return ValidationResult.failure(absolute, "project file cannot be read", readableMessage(exception));
+        }
+    }
+
+    /**
+     * Validates an already captured editor/disk image of a PPJ. The caller owns the capture point,
+     * so the exact bytes validated here can be published into the immutable server workspace without
+     * re-reading the user-editable file.
+     */
+    static @NotNull ValidationResult validate(@NotNull Path projectFile, @NotNull byte[] projectBytes) {
+        Path absolute = projectFile.toAbsolutePath().normalize();
+
+        try {
             Document document = parse(projectBytes);
             Element root = document.getDocumentElement();
             String rootName = root != null && root.getLocalName() != null
@@ -183,7 +193,6 @@ final class PapyrusProjectReloadValidator {
             return ValidationResult.success(
                     absolute,
                     List.copyOf(localImports),
-                    fingerprint,
                     snapshotBytes
             );
         } catch (ParserConfigurationException | SAXException exception) {
@@ -216,18 +225,6 @@ final class PapyrusProjectReloadValidator {
                     "validated snapshot cannot be created",
                     readableMessage(exception)
             );
-        }
-    }
-
-    static @NotNull String fingerprint(@NotNull Path projectFile) throws IOException {
-        return fingerprint(Files.readAllBytes(projectFile.toAbsolutePath().normalize()));
-    }
-
-    private static @NotNull String fingerprint(@NotNull byte[] bytes) {
-        try {
-            return HexFormat.of().formatHex(MessageDigest.getInstance("SHA-256").digest(bytes));
-        } catch (NoSuchAlgorithmException exception) {
-            throw new IllegalStateException("SHA-256 is unavailable", exception);
         }
     }
 
@@ -367,7 +364,6 @@ final class PapyrusProjectReloadValidator {
             boolean valid,
             @NotNull Path projectFile,
             @NotNull List<Path> localImports,
-            @NotNull String fingerprint,
             byte[] snapshotBytes,
             @NotNull String reason,
             @NotNull String details
@@ -375,14 +371,12 @@ final class PapyrusProjectReloadValidator {
         static @NotNull ValidationResult success(
                 @NotNull Path projectFile,
                 @NotNull List<Path> localImports,
-                @NotNull String fingerprint,
                 byte[] snapshotBytes
         ) {
             return new ValidationResult(
                     true,
                     projectFile,
                     localImports,
-                    fingerprint,
                     snapshotBytes.clone(),
                     "",
                     ""
@@ -394,7 +388,7 @@ final class PapyrusProjectReloadValidator {
                 @NotNull String reason,
                 @NotNull String details
         ) {
-            return new ValidationResult(false, projectFile, List.of(), "", new byte[0], reason, details);
+            return new ValidationResult(false, projectFile, List.of(), new byte[0], reason, details);
         }
 
         public byte[] snapshotBytes() {

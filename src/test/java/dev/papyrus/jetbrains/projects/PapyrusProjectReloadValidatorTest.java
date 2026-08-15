@@ -42,6 +42,32 @@ final class PapyrusProjectReloadValidatorTest {
     }
 
     @Test
+    void validatesCapturedEditorBytesWithoutSavingThemToDisk() throws Exception {
+        Path diskImport = Files.createDirectories(temporaryDirectory.resolve("disk-import"));
+        Path editorImport = Files.createDirectories(temporaryDirectory.resolve("editor-import"));
+        Path ppj = writeProject("""
+                <PapyrusProject xmlns="PapyrusProject.xsd">
+                  <Imports><Import>disk-import</Import></Imports>
+                </PapyrusProject>
+                """);
+        String diskText = Files.readString(ppj);
+        byte[] editorBytes = """
+                <PapyrusProject xmlns="PapyrusProject.xsd">
+                  <Imports><Import>editor-import</Import></Imports>
+                </PapyrusProject>
+                """.getBytes(java.nio.charset.StandardCharsets.UTF_8);
+
+        PapyrusProjectReloadValidator.ValidationResult result =
+                PapyrusProjectReloadValidator.validate(ppj, editorBytes);
+
+        assertTrue(result.valid());
+        assertEquals(editorImport.toAbsolutePath().normalize(), result.localImports().getFirst());
+        assertEquals(diskText, Files.readString(ppj));
+        assertFalse(new String(result.snapshotBytes(), java.nio.charset.StandardCharsets.UTF_8)
+                .contains(diskImport.toAbsolutePath().normalize().toString()));
+    }
+
+    @Test
     void reportsMissingImportWithOriginalAndResolvedPath() throws Exception {
         Path ppj = writeProject("""
                 <PapyrusProject xmlns="PapyrusProject.xsd">

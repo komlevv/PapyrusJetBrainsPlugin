@@ -1,8 +1,13 @@
 package dev.papyrus.jetbrains.projects;
 
 import com.intellij.openapi.application.PathManager;
+import com.intellij.openapi.application.ReadAction;
+import com.intellij.openapi.editor.Document;
+import com.intellij.openapi.fileEditor.FileDocumentManager;
 import com.intellij.openapi.diagnostic.Logger;
 import com.intellij.openapi.project.Project;
+import com.intellij.openapi.vfs.LocalFileSystem;
+import com.intellij.openapi.vfs.VirtualFile;
 import dev.papyrus.jetbrains.run.PapyrusProjectTaskDiscovery;
 import org.jetbrains.annotations.NotNull;
 import org.jetbrains.annotations.Nullable;
@@ -110,36 +115,25 @@ final class PapyrusProjectSnapshotStore {
                     new PapyrusProjectReloadValidator.ValidationResult[tasks.size()];
             for (int index = 0; index < tasks.size(); index++) {
                 PapyrusProjectTaskDiscovery.Task task = tasks.get(index);
-                PapyrusProjectReloadValidator.ValidationResult validation =
-                        PapyrusProjectReloadValidator.validate(task.projectFile());
-                if (!validation.valid()) {
-                    return Preparation.failure(previous, validation, task.relativePath());
-                }
-                validations[index] = validation;
-            }
-
-            for (int index = 0; index < tasks.size(); index++) {
-                PapyrusProjectTaskDiscovery.Task task = tasks.get(index);
+                byte[] currentBytes;
                 try {
-                    String currentFingerprint = PapyrusProjectReloadValidator.fingerprint(task.projectFile());
-                    if (!validations[index].fingerprint().equals(currentFingerprint)) {
-                        PapyrusProjectReloadValidator.ValidationResult failure =
-                                PapyrusProjectReloadValidator.ValidationResult.failure(
-                                        task.projectFile(),
-                                        "project file changed during validation",
-                                        "Project: " + task.relativePath() + "\nThe file changed before its validated snapshot could be published. Click Refresh again."
-                                );
-                        return Preparation.failure(previous, failure, task.relativePath());
-                    }
+                    currentBytes = readCurrentProjectBytes(task.projectFile());
                 } catch (IOException exception) {
                     PapyrusProjectReloadValidator.ValidationResult failure =
                             PapyrusProjectReloadValidator.ValidationResult.failure(
                                     task.projectFile(),
-                                    "project file cannot be re-read after validation",
+                                    "project file cannot be read",
                                     readableMessage(exception)
                             );
                     return Preparation.failure(previous, failure, task.relativePath());
                 }
+
+                PapyrusProjectReloadValidator.ValidationResult validation =
+                        PapyrusProjectReloadValidator.validate(task.projectFile(), currentBytes);
+                if (!validation.valid()) {
+                    return Preparation.failure(previous, validation, task.relativePath());
+                }
+                validations[index] = validation;
             }
 
             Path storeRoot = storeRoot();
@@ -195,6 +189,28 @@ final class PapyrusProjectSnapshotStore {
                 return Preparation.failure(previous, failure, base.toString());
             }
         }
+    }
+
+    /**
+     * Reads the exact PPJ state visible to the user. If IntelliJ has an editor document for the
+     * project file, its current in-memory text wins even when Ctrl+S has not been pressed. Otherwise
+     * the file is read from disk. The returned bytes are then the only bytes validation and snapshot
+     * publication use for this refresh generation.
+     */
+    private @NotNull byte[] readCurrentProjectBytes(@NotNull Path projectFile) throws IOException {
+        Path absolute = projectFile.toAbsolutePath().normalize();
+        byte[] editorBytes = ReadAction.computeBlocking(() -> {
+            VirtualFile virtualFile = LocalFileSystem.getInstance().findFileByNioFile(absolute);
+            if (virtualFile == null || !virtualFile.isValid()) {
+                return null;
+            }
+            FileDocumentManager documentManager = FileDocumentManager.getInstance();
+            Document document = documentManager.getCachedDocument(virtualFile);
+            return document != null && documentManager.isDocumentUnsaved(document)
+                    ? document.getText().getBytes(StandardCharsets.UTF_8)
+                    : null;
+        });
+        return editorBytes != null ? editorBytes : Files.readAllBytes(absolute);
     }
 
     @NotNull Snapshot activeOrEmpty() {
