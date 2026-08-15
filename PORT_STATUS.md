@@ -1,8 +1,13 @@
-# Papyrus JetBrains Plugin port status — 0.2.168 source
+# Papyrus JetBrains Plugin port status — 0.2.169 source
 
 Current status: **ALPHA**. Active compatibility target: **CLion 2026.2.x / IntelliJ Platform 262**; verified target: **CLion 2026.2.1 / CL-262.9437.136**.
 
-The current source is **0.2.168**. The latest user-confirmed green Windows baseline is **0.2.163: 75/75 UNIT + 20/20 PAPYRUS-LANG + 48/48 REAL CLION UI**. The expanded 0.2.148 investigation gate is **59 UNIT + 20 PAPYRUS-LANG + 45 REAL CLION UI**; its three physical Ctrl+B scenarios intentionally reproduced the CLion/Rider shortcut-dispatch defect. The user's 0.2.150 gate kept 59/59 UNIT and 20/20 PAPYRUS-LANG green but failed exactly the three physical Ctrl+B scenarios because the editor-local `AnActionWrapper` was performed without navigation. 0.2.151 replaced that wrapper execution strategy and the user has since confirmed the resulting Ctrl+B path works in real CLion. The diagnostic 0.2.152 removal of the interceptor failed; 0.2.153 retains 0.2.151 and targets imported-source LSP continuity.
+The current source is **0.2.169**. The latest user-confirmed green Windows baseline is **0.2.168: 78/78 UNIT + 20/20 PAPYRUS-LANG + 48/48 REAL CLION UI**. 0.2.169 moves Papyrus project activation to IDE project startup, gated by a filesystem probe for project-local `.ppj` or `.psc` files, so unrelated projects do not start Papyrus services. The expanded 0.2.148 investigation gate is **59 UNIT + 20 PAPYRUS-LANG + 45 REAL CLION UI**; its three physical Ctrl+B scenarios intentionally reproduced the CLion/Rider shortcut-dispatch defect. The user's 0.2.150 gate kept 59/59 UNIT and 20/20 PAPYRUS-LANG green but failed exactly the three physical Ctrl+B scenarios because the editor-local `AnActionWrapper` was performed without navigation. 0.2.151 replaced that wrapper execution strategy and the user has since confirmed the resulting Ctrl+B path works in real CLion. The diagnostic 0.2.152 removal of the interceptor failed; 0.2.153 retains 0.2.151 and targets imported-source LSP continuity.
+
+
+## 0.2.169 project-startup detection
+
+A post-startup probe looks only for project-local `.ppj` or `.psc` files and then starts Papyrus Projects, guarded VFS/document synchronization, managed import synchronization, and the Papyrus LSP without requiring an open editor file. `.idea`, build/output/dependency trees, and `.papyrus-jetbrains-*` generated snapshots are ignored as activation signals. Expected gate: **81 UNIT + 20 PAPYRUS-LANG + 48 REAL CLION UI**.
 
 
 ## 0.2.165 unsaved PPJ Refresh
@@ -21,7 +26,7 @@ The Projects service keeps its previous successful snapshot during dirty, valida
 
 ## Baseline
 
-- Plugin source version: **0.2.168**.
+- Plugin source version: **0.2.169**.
 - 0.2.126 is the all-24 plugin-source inspection cleanup; expected runtime behavior is unchanged.
 - Authoritative Windows gate: user-verified **0.2.146 — 59/59 UNIT, 16/16 PAPYRUS-LANG, 39/39 REAL CLION UI = 114/114**.
 - Hardened LSP-semantic **Refactor | Rename** is VERIFIED at the 0.2.112 baseline.

@@ -7,7 +7,7 @@ package dev.papyrus.jetbrains;
  * PluginDescriptorBehaviorTest guards the packaged descriptor value.</p>
  */
 public final class PapyrusPluginVersion {
-    public static final String CURRENT = "0.2.168";
+    public static final String CURRENT = "0.2.169";
 
     private PapyrusPluginVersion() {
     }

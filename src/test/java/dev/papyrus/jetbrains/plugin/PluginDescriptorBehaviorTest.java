@@ -39,6 +39,7 @@ final class PluginDescriptorBehaviorTest {
             assertTrue(hasPapyrusBuildConfigurable(document));
             assertTrue(hasPapyrusLanguageConfigurable(document));
             assertTrue(hasPapyrusDirectoryProjectGenerator(document));
+            assertTrue(hasPapyrusStartupActivity(document));
             assertTrue(hasDependency(document, "com.intellij.modules.lsp"));
             assertTrue(hasDependency(document, "com.intellij.modules.ultimate"));
             assertFalse(hasLanguageProjectGenerator(document));
@@ -148,6 +149,16 @@ final class PluginDescriptorBehaviorTest {
 
     private static boolean hasLanguageProjectGenerator(Document document) {
         return document.getElementsByTagName("newProjectWizard.languageGenerator").getLength() > 0;
+    }
+
+    private static boolean hasPapyrusStartupActivity(Document document) {
+        String implementation = "dev.papyrus.jetbrains.startup.PapyrusProjectStartupActivity";
+        var activities = document.getElementsByTagName("postStartupActivity");
+        for (int index = 0; index < activities.getLength(); index++) {
+            var element = (org.w3c.dom.Element) activities.item(index);
+            if (implementation.equals(element.getAttribute("implementation"))) return true;
+        }
+        return false;
     }
 
     private static boolean hasPapyrusDirectoryProjectGenerator(Document document) {

@@ -62,7 +62,7 @@ public final class PapyrusProjectsService {
     private volatile Status status = new Status(
             Phase.SERVER_NOT_READY,
             "Papyrus language server is not ready",
-            "Open a Papyrus script or project file to start the language service.",
+            "Waiting for the Papyrus language service to start.",
             false
     );
 

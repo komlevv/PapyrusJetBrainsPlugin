@@ -4,9 +4,9 @@ This document contains only **remaining decisions/work**. Completed per-version 
 
 ## Current baseline
 
-- Current source: **0.2.168**. 0.2.151's editor-local Ctrl+B route is user-confirmed working; 0.2.154-0.2.156 established the source-only import-library model; 0.2.158 adds guarded PPJ validation/reload state, last-known-good project snapshots, and explicit user-visible reload errors.
+- Current source: **0.2.169**. 0.2.151's editor-local Ctrl+B route is user-confirmed working; 0.2.154-0.2.156 established the source-only import-library model; 0.2.158 adds guarded PPJ validation/reload state, last-known-good project snapshots, and explicit user-visible reload errors.
 - 0.2.126: plugin-owned cleanup for all 24 submitted CLion inspection screenshots; no intended Papyrus feature change.
-- Current authoritative gate: user-verified **75 unit / 20 exact-upstream server / 48 real-CLion = 143/143** on **0.2.163**.
+- Current authoritative gate: user-verified **78 unit / 20 exact-upstream server / 48 real-CLion = 146/146** on **0.2.168**.
 - Hardened semantic Papyrus Rename is VERIFIED at the 0.2.112 baseline.
 - The broad non-debugger feature port/parity burn-down is complete and verified in 0.2.138. Stage 1 closed Completion/Definition/References semantic edges, Stage 2 the real-IDE document-sync/Syntax Tree/diagnostics gap, Stage 3 Project Infos/script-status parity, and Stage 4 safe task discovery/compiler-output navigation.
 - Bounded safe-Pyro compile, the native `Papyrus Project` Run Configuration, and opt-in `Build Project / Ctrl+F9` routing are VERIFIED. 0.2.124 keeps the target IDE on CLion 2026.2.1, removes IDEA-specific Starter/build metadata, and ports New Project to `DirectoryProjectGenerator`.
@@ -285,3 +285,5 @@ For every future iteration:
 - PPJ error text must include `ERROR: PPJ validation failed: <cause>` plus the original/resolved path details.
 - LSP workspace must be outside the editable project root.
 - Restarting the Papyrus LSP while the real PPJ is invalid must preserve the validated fallback graph and keep `VALIDATION_ERROR` visible.
+
+- 0.2.169 startup activation: after an IDE project opens, a lightweight project-local `.ppj`/`.psc` probe activates Papyrus Projects, the guarded watcher/document bridge, and the Papyrus LSP without requiring an editor tab. `.idea`, build/output, dependency, and plugin-generated snapshot trees do not count as Papyrus project signals.

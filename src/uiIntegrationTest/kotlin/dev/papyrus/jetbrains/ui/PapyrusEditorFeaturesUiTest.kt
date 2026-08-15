@@ -67,17 +67,30 @@ internal class PapyrusEditorFeaturesUiTest {
         ide.waitFor("Papyrus target file to enter the project content index", 60.seconds) {
             support.isProjectContentFile(ide.project, targetPath)
         }
-        val editor = open(fixture.target)
+        val targetFilePath = fixture.target.toAbsolutePath().normalize().toString()
         try {
-            ide.waitFor("Papyrus LSP client", 45.seconds) { languageService().hasRunningClient() }
+            ide.waitFor("Papyrus LSP client from project startup", 60.seconds) {
+                languageService().hasRunningClient()
+            }
+            ide.waitFor("Papyrus projectInfos from project startup", 60.seconds) {
+                support.papyrusProjectInfosReady(ide.project) &&
+                    support.papyrusProjectInfosContainsFile(ide.project, targetFilePath)
+            }
+            ide.waitFor("Papyrus Projects availability from project startup", 30.seconds) {
+                ide.service<ToolWindowManagerRemote>(ide.project)
+                    .getToolWindow("Papyrus Projects")
+                    ?.isAvailable() == true
+            }
         } catch (error: AssertionError) {
             throw AssertionError(
-                "Papyrus LSP startup failed after the target entered project content. " +
+                "Papyrus startup detection failed before any .psc editor was opened. " +
                     "Client states: [${support.papyrusLspClientStates(ide.project)}]. " +
                     "Output: ${support.papyrusLspOutputSnapshot(ide.project)}",
                 error,
             )
         }
+
+        val editor = open(fixture.target)
         assertNotNull(editor)
     }
 
@@ -2723,6 +2736,7 @@ internal class PapyrusEditorFeaturesUiTest {
     @Remote("com.intellij.openapi.wm.ToolWindow")
     internal interface ToolWindowRemote {
         fun isVisible(): Boolean
+        fun isAvailable(): Boolean
         fun show()
         fun getContentManager(): ContentManagerRemote
     }

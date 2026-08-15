@@ -1,4 +1,4 @@
-# Papyrus JetBrains Plugin handoff — 0.2.168 source
+# Papyrus JetBrains Plugin handoff — 0.2.169 source
 
 > Documentation boundary: `README.md` is the public/user-facing GitHub landing page. Version-by-version history, regression notes, test gates, inspection/lint details, local build paths, offline dependency layout, implementation notes, and other maintainer-only operational context belong here or in the dedicated living technical documents, not in `README.md`.
 
@@ -12,6 +12,17 @@
 
 Target runtime/test IDE: **CLion 2026.2.x / IntelliJ Platform 262**. Verified installation: **CLion 2026.2.1 / CL-262.9437.136**.
 
+
+
+## 0.2.169 — project-startup Papyrus detection
+
+- Papyrus activation no longer depends on opening a `.psc` or `.ppj` editor tab.
+- A post-startup background activity probes project content for real `.ppj` or `.psc` files.
+- Only matching projects initialize Papyrus Projects, VFS/document bridges, managed import synchronization, and the Papyrus LSP.
+- `.idea`, common build/output/dependency trees, and `.papyrus-jetbrains-*` generated snapshots are excluded from the startup signal probe.
+- `LspClientManager.ensureClientStarted(...)` is used so the LSP can start with no editor file open; the existing `fileOpened()` route remains an idempotent fallback.
+- REAL CLION UI setup now requires the LSP, projectInfos, and Papyrus Projects availability before opening the first `.psc`.
+- Expected gate: **81 UNIT + 20 PAPYRUS-LANG + 48 REAL CLION UI**.
 
 ## 0.2.168 — versioned project-local `.idea` state
 
@@ -35,9 +46,9 @@ The Projects `Refresh` button now switches immediately to a native disabled `Ref
 
 ## Current source state
 
-- Current source version: **0.2.168**.
+- Current source version: **0.2.169**.
 - 0.2.126 is the all-24 inspection cleanup. It does not add a Papyrus feature; it refactors plugin-owned warnings, updates deprecated/DevKit APIs, adds descriptor/live-template i18n, and documents every submitted screenshot in `INSPECTION_AUDIT.md`. Vendor/generated artifacts remain untouched.
-- Latest user-confirmed green Windows gate: **0.2.164 — 75/75 UNIT, 20/20 PAPYRUS-LANG, 48/48 REAL CLION UI**.
+- Latest user-confirmed green Windows gate: **0.2.168 — 78/78 UNIT, 20/20 PAPYRUS-LANG, 48/48 REAL CLION UI**.
 - Hardened semantic **Refactor | Rename** is VERIFIED at the 0.2.112 baseline.
 - The broad non-debugger port/parity burn-down is complete and verified in 0.2.138: Stage 1 covers semantic Completion/Definition/References edges, Stage 2 real-IDE Syntax Tree/document sync/diagnostics, Stage 3 Project Infos/script status, and Stage 4 safe Pyro task discovery/compiler-output navigation. Debugger is explicitly deferred.
 - Bounded **Compile Project**, the executable `PapyrusProject` IDE Run Configuration, and project-level opt-in Build Project are VERIFIED. 0.2.124 keeps the active runtime/test target on CLion and replaces the Java-only New Project language generator with `DirectoryProjectGenerator`.
