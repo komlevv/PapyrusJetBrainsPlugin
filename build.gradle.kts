@@ -19,7 +19,7 @@ plugins {
 }
 
 group = "dev.papyrus"
-version = "0.2.170"
+version = "0.2.174"
 
 data class IdeLaunchTarget(
     val launcher: File,

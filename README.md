@@ -23,7 +23,7 @@ This is a CLion port of `joelday/papyrus-lang`. Plugin uses `v3.3.0-prerelease.1
 - diagnostics;
 - Go to Declaration / Definition;
 - Papyrus-local Go to Declaration shortcut routing for CLion/Rider keyboard arbitration;
-- managed `Papyrus Imports` source-only library under External Libraries, with the same include labels shown by Papyrus Projects;
+- synthetic `Papyrus Imports` source library under External Libraries, with the same include labels shown by Papyrus Projects;
 - Go to Declaration bridge for import-library-source → import navigation;
 - Find Usages;
 - Quick Definition;

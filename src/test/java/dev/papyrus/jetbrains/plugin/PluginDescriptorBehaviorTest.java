@@ -40,6 +40,8 @@ final class PluginDescriptorBehaviorTest {
             assertTrue(hasPapyrusLanguageConfigurable(document));
             assertTrue(hasPapyrusDirectoryProjectGenerator(document));
             assertTrue(hasPapyrusStartupActivity(document));
+            assertTrue(hasPapyrusAdditionalLibraryRootsProvider(document));
+            assertFalse(hasPapyrusLegacyLibraryType(document));
             assertTrue(hasDependency(document, "com.intellij.modules.lsp"));
             assertTrue(hasDependency(document, "com.intellij.modules.ultimate"));
             assertFalse(hasLanguageProjectGenerator(document));
@@ -53,6 +55,26 @@ final class PluginDescriptorBehaviorTest {
         }
     }
 
+
+    private static boolean hasPapyrusAdditionalLibraryRootsProvider(Document document) {
+        String implementation = "dev.papyrus.jetbrains.projects.PapyrusImportAdditionalLibraryRootsProvider";
+        var providers = document.getElementsByTagName("additionalLibraryRootsProvider");
+        for (int index = 0; index < providers.getLength(); index++) {
+            var element = (org.w3c.dom.Element) providers.item(index);
+            if (implementation.equals(element.getAttribute("implementation"))) return true;
+        }
+        return false;
+    }
+
+    private static boolean hasPapyrusLegacyLibraryType(Document document) {
+        String implementation = "dev.papyrus.jetbrains.projects.PapyrusImportLibraryType";
+        var types = document.getElementsByTagName("library.type");
+        for (int index = 0; index < types.getLength(); index++) {
+            var element = (org.w3c.dom.Element) types.item(index);
+            if (implementation.equals(element.getAttribute("implementation"))) return true;
+        }
+        return false;
+    }
 
     private static boolean hasPapyrusResourceBundle(Document document) {
         var bundles = document.getElementsByTagName("resource-bundle");

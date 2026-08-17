@@ -14,6 +14,17 @@ The explicit Compile Project action and opt-in Build Project bridge write proces
 This file describes the **current safety model**, not historical incidents.
 
 
+
+## 0.2.174 synthetic-library test cleanup
+
+0.2.174 changes no production filesystem, indexing, LSP, compiler, or project-model behavior. It removes an obsolete real-IDE test helper that depended on `LibraryEx` and the old module-library `LibraryType` path. The regression gate now checks synthetic-library membership through public `ProjectFileIndex.isInLibrarySource(...)`, matching the 0.2.173 production architecture.
+
+## 0.2.173 synthetic import-library API review
+
+Current PPJ imports are no longer represented by a plugin-created module `Library` and no longer require a custom `LibraryType` or `LibraryEx`. `PapyrusImportAdditionalLibraryRootsProvider` exposes one immutable `PapyrusImportSyntheticLibrary` through IntelliJ's public `AdditionalLibraryRootsProvider`/`SyntheticLibrary` API. The Project View decorator scopes labels to the plugin-owned synthetic parent rather than inspecting JetBrains `impl.nodes` classes. A project-local directory may therefore remain ordinary project content while also appearing under `External Libraries -> Papyrus Imports` when PPJ explicitly lists it as an import.
+
+The synthetic library itself performs no filesystem write and does not mutate module roots. 0.2.173 keeps the old persisted module/library identity only as a migration token so the previously plugin-owned 0.2.172 module library can be removed once; unrelated libraries are not adopted. Dynamic root additions/removals are announced with JetBrains' documented `AdditionalLibraryRootsListener.fireAdditionalLibraryChanged(...)` method under a write action so indexing and Project View refresh follow the Platform path. That listener is public but `@ApiStatus.Experimental` in Platform 262; the new import-library path otherwise avoids JetBrains `impl.*` dependencies.
+
 ## 0.2.158 PPJ reload safety
 
 PPJ editor saves no longer flow through native IntelliJ LSP text-document synchronization. This intentionally prevents unvalidated `textDocument/didSave` from reaching papyrus-lang, whose upstream reload path clears existing project hosts before replacement construction. The plugin-owned Refresh path is read-only until every project-local PPJ passes bounded XML/path validation; only then is one explicit reload notification sent. No filesystem content is modified by validation.

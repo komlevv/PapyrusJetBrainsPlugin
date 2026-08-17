@@ -1,7 +1,6 @@
 package dev.papyrus.jetbrains.projects;
 
 import com.intellij.openapi.project.Project;
-import com.intellij.openapi.roots.OrderRootType;
 import dev.papyrus.jetbrains.PapyrusPluginVersion;
 import dev.papyrus.jetbrains.protocol.ProjectInfo;
 import dev.papyrus.jetbrains.protocol.ProjectInfoSourceInclude;
@@ -15,7 +14,6 @@ import java.nio.file.Path;
 import java.util.List;
 import java.util.Map;
 
-import static org.junit.jupiter.api.Assertions.assertArrayEquals;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 
 final class PapyrusImportLibraryServiceTest {
@@ -24,15 +22,15 @@ final class PapyrusImportLibraryServiceTest {
     Path temporaryDirectory;
 
     @Test
-    void libraryTypeExposesSourceRootsAsExternalDependencies() {
-        assertArrayEquals(
-                new OrderRootType[]{OrderRootType.SOURCES},
-                new PapyrusImportLibraryType().getExternalRootTypes()
-        );
+    void syntheticLibraryUsesPapyrusImportsPresentation() {
+        PapyrusImportSyntheticLibrary library = new PapyrusImportSyntheticLibrary(List.of(), Map.of());
+
+        assertEquals("Papyrus Imports", library.getPresentableText());
+        assertEquals(List.of(), List.copyOf(library.getSourceRoots()));
     }
 
     @Test
-    void collectsOnlyLocalImportsAndCollapsesNestedRoots() throws Exception {
+    void collectsEveryLocalImportAndCollapsesNestedRoots() throws Exception {
         Path imports = Files.createDirectories(temporaryDirectory.resolve("Imports"));
         Path nested = Files.createDirectories(imports.resolve("Nested"));
         Path second = Files.createDirectories(temporaryDirectory.resolve("Second"));
@@ -55,9 +53,10 @@ final class PapyrusImportLibraryServiceTest {
 
         List<String> roots = PapyrusImportLibraryService.collectLocalImportRoots(infos);
 
-        assertEquals(2, roots.size());
+        assertEquals(3, roots.size());
         assertEquals(imports.toRealPath().toString(), roots.get(0));
         assertEquals(second.toRealPath().toString(), roots.get(1));
+        assertEquals(source.toRealPath().toString(), roots.get(2));
 
     }
 
@@ -109,8 +108,9 @@ final class PapyrusImportLibraryServiceTest {
         current.managedLibraryName = "Papyrus Imports";
         service.loadState(current);
 
-        assertEquals("CurrentModule", service.getState().managedModuleName);
-        assertEquals("Papyrus Imports", service.getState().managedLibraryName);
+        assertEquals(PapyrusPluginVersion.CURRENT, service.getState().pluginVersion);
+        assertEquals("", service.getState().managedModuleName);
+        assertEquals("", service.getState().managedLibraryName);
     }
 
     private static ProjectInfoSourceInclude include(

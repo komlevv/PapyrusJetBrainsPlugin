@@ -1,7 +1,7 @@
 <idea-plugin>
     <id>dev.papyrus.intellij-papyrus</id>
     <name>Papyrus Language</name>
-    <version>0.2.170</version>
+    <version>0.2.174</version>
 
     <vendor>Local</vendor>
     <resource-bundle>messages.PapyrusBundle</resource-bundle>
@@ -49,8 +49,8 @@
         <postStartupActivity
                 implementation="dev.papyrus.jetbrains.startup.PapyrusProjectStartupActivity"/>
 
-        <library.type
-                implementation="dev.papyrus.jetbrains.projects.PapyrusImportLibraryType"/>
+        <additionalLibraryRootsProvider
+                implementation="dev.papyrus.jetbrains.projects.PapyrusImportAdditionalLibraryRootsProvider"/>
 
         <projectViewNodeDecorator
                 implementation="dev.papyrus.jetbrains.projects.PapyrusImportProjectViewDecorator"/>

@@ -334,9 +334,7 @@ internal class PapyrusEditorFeaturesUiTest {
             !support.isProjectContentFile(ide.project, questPath) &&
                 !support.isProjectContentFile(ide.project, formPath) &&
                 support.isProjectLibrarySourceFile(ide.project, questPath) &&
-                support.isProjectLibrarySourceFile(ide.project, formPath) &&
-                support.papyrusImportLibraryExternalRootTypes(ide.project)
-                    .contains("sourcesExternal=true")
+                support.isProjectLibrarySourceFile(ide.project, formPath)
         }
 
         val editor = open(quest)
@@ -2564,7 +2562,6 @@ internal class PapyrusEditorFeaturesUiTest {
         fun stopShortcutDispatchTrace(): String
         fun isProjectContentFile(project: Project, filePath: String): Boolean
         fun isProjectLibrarySourceFile(project: Project, filePath: String): Boolean
-        fun papyrusImportLibraryExternalRootTypes(project: Project): String
         fun clearPapyrusLspOutputDiagnostic()
         fun papyrusLspOutputDiagnostic(project: Project): String
         fun selectedToolWindowTreePath(project: Project, toolWindowId: String): String

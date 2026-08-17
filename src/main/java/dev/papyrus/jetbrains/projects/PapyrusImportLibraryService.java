@@ -11,18 +11,13 @@ import com.intellij.openapi.diagnostic.Logger;
 import com.intellij.openapi.module.Module;
 import com.intellij.openapi.module.ModuleManager;
 import com.intellij.openapi.project.Project;
-import com.intellij.openapi.roots.LibraryOrderEntry;
-import com.intellij.openapi.roots.ModuleRootManager;
+import com.intellij.openapi.roots.AdditionalLibraryRootsListener;
 import com.intellij.openapi.roots.ModuleRootModificationUtil;
-import com.intellij.openapi.roots.OrderEntry;
-import com.intellij.openapi.roots.OrderRootType;
-import com.intellij.openapi.roots.ProjectFileIndex;
-import com.intellij.openapi.roots.impl.libraries.LibraryEx;
+import com.intellij.openapi.roots.SyntheticLibrary;
 import com.intellij.openapi.roots.libraries.Library;
 import com.intellij.openapi.roots.libraries.LibraryTable;
 import com.intellij.openapi.util.SystemInfo;
 import com.intellij.openapi.vfs.LocalFileSystem;
-import com.intellij.openapi.vfs.VfsUtilCore;
 import com.intellij.openapi.vfs.VirtualFile;
 import dev.papyrus.jetbrains.PapyrusPluginVersion;
 import dev.papyrus.jetbrains.protocol.ProjectInfo;
@@ -43,15 +38,16 @@ import java.util.Locale;
 import java.util.Map;
 
 /**
- * Mirrors local Papyrus import directories into a managed IntelliJ module library.
+ * Maintains the immutable synthetic-library snapshot for local Papyrus imports.
  *
- * <p>Papyrus imports are dependencies, not project source roots. They therefore belong under
- * External Libraries as {@link OrderRootType#SOURCES}. IntelliJ Platform 2026.2 native LSP
- * features only activate for project-content files, so navigation while an import file is the
- * active editor is handled separately by the Papyrus Go To Declaration bridge.</p>
+ * <p>PPJ imports are dependencies, so they are exposed through IntelliJ's official
+ * {@link com.intellij.openapi.roots.AdditionalLibraryRootsProvider}/{@link SyntheticLibrary}
+ * API instead of creating a persistent module library. A project-local directory may therefore
+ * remain normal project content and simultaneously appear under External Libraries when it is
+ * explicitly listed in PPJ {@code <Imports>}.</p>
  *
- * <p>This service only manages a library that it created and recorded in its own state. It does
- * not adopt or remove an unrelated user library with the same display name.</p>
+ * <p>The persisted module/library names are retained only as a one-version migration hook so
+ * 0.2.173 can remove the managed module library created by 0.2.172 and earlier.</p>
  */
 @Service(Service.Level.PROJECT)
 @State(
@@ -62,8 +58,7 @@ public final class PapyrusImportLibraryService
         implements PersistentStateComponent<PapyrusImportLibraryService.SettingsState> {
 
     private static final Logger LOG = Logger.getInstance(PapyrusImportLibraryService.class);
-    private static final String DEFAULT_LIBRARY_NAME = "Papyrus Imports";
-    private static final String FALLBACK_LIBRARY_NAME = "Papyrus Imports (Papyrus Language)";
+    private static final String LIBRARY_DEBUG_NAME = "Papyrus PPJ imports";
 
     public static final class SettingsState {
         // Empty is intentional so legacy .idea/papyrus.xml state is rejected on load.
@@ -78,8 +73,7 @@ public final class PapyrusImportLibraryService
     private long requestedGeneration;
     private volatile SettingsState state = currentDefaults();
     private volatile ManagedLibrary staleManagedLibrary;
-    private volatile List<String> currentImportRoots = List.of();
-    private volatile Map<String, String> currentImportLabels = Map.of();
+    private volatile PapyrusImportSyntheticLibrary currentLibrary;
 
     public PapyrusImportLibraryService(@NotNull Project project) {
         this.project = project;
@@ -95,31 +89,37 @@ public final class PapyrusImportLibraryService
     }
 
     @Override
-    public void loadState(@NotNull SettingsState state) {
-        if (!PapyrusPluginVersion.CURRENT.equals(state.pluginVersion)) {
-            if (state.managedModuleName != null && !state.managedModuleName.isBlank()
-                    && state.managedLibraryName != null && !state.managedLibraryName.isBlank()) {
-                staleManagedLibrary = new ManagedLibrary(state.managedModuleName, state.managedLibraryName);
-            }
-            this.state = currentDefaults();
-            currentImportRoots = List.of();
-            currentImportLabels = Map.of();
-            return;
+    public void loadState(@NotNull SettingsState loadedState) {
+        if (loadedState.managedModuleName != null && !loadedState.managedModuleName.isBlank()
+                && loadedState.managedLibraryName != null && !loadedState.managedLibraryName.isBlank()) {
+            staleManagedLibrary = new ManagedLibrary(
+                    loadedState.managedModuleName,
+                    loadedState.managedLibraryName
+            );
         }
-        if (state.managedModuleName == null) {
-            state.managedModuleName = "";
-        }
-        if (state.managedLibraryName == null) {
-            state.managedLibraryName = "";
-        }
-        state.pluginVersion = PapyrusPluginVersion.CURRENT;
-        this.state = state;
+
+        // Synthetic libraries do not need persistent ownership state. Always normalize the old
+        // module-library fields away, including state written by 0.2.172.
+        state = currentDefaults();
+        currentLibrary = null;
     }
 
     public void discardStaleManagedLibraryAsync() {
-        if (staleManagedLibrary != null) {
-            clearAsync();
+        ManagedLibrary stale = staleManagedLibrary;
+        if (stale == null || project.isDisposed()) {
+            return;
         }
+        ApplicationManager.getApplication().executeOnPooledThread(() -> {
+            synchronized (syncExecutionLock) {
+                if (project.isDisposed()) {
+                    return;
+                }
+                removeLegacyManagedLibrary(stale);
+                if (stale.equals(staleManagedLibrary)) {
+                    staleManagedLibrary = null;
+                }
+            }
+        });
     }
 
     public void clearAsync() {
@@ -138,33 +138,31 @@ public final class PapyrusImportLibraryService
 
         ApplicationManager.getApplication().executeOnPooledThread(() -> {
             ImportCollection imports = collectLocalImports(infos);
+            PapyrusImportSyntheticLibrary nextLibrary = createLibrary(imports);
+
             synchronized (syncExecutionLock) {
                 if (project.isDisposed() || !isCurrentGeneration(generation)) {
                     return;
                 }
-                syncNow(imports, infos);
+
+                PapyrusImportSyntheticLibrary previousLibrary = currentLibrary;
+                if (librariesEqual(previousLibrary, nextLibrary)) {
+                    return;
+                }
+
+                currentLibrary = nextLibrary;
+                publishLibraryChange(previousLibrary, nextLibrary);
             }
         });
     }
 
     public boolean isImportFile(@NotNull VirtualFile file) {
-        if (!file.isValid()) {
-            return false;
-        }
-        String filePath = file.getPath();
-        for (String root : currentImportRoots) {
-            if (isAncestorOrSame(root, filePath)) {
-                return true;
-            }
-        }
-        return false;
+        PapyrusImportSyntheticLibrary library = currentLibrary;
+        return file.isValid() && library != null && library.contains(file);
     }
 
-    public @Nullable String getImportRootDisplayLabel(@NotNull VirtualFile file) {
-        if (!file.isValid()) {
-            return null;
-        }
-        return currentImportLabels.get(pathKey(file.getPath()));
+    @Nullable PapyrusImportSyntheticLibrary getCurrentLibrary() {
+        return currentLibrary;
     }
 
     private boolean isCurrentGeneration(long generation) {
@@ -173,118 +171,65 @@ public final class PapyrusImportLibraryService
         }
     }
 
-    private void syncNow(@NotNull ImportCollection imports, @NotNull ProjectInfos infos) {
-        ManagedLibrary stale = staleManagedLibrary;
-        if (stale != null) {
-            removeManagedLibrary(stale);
-            staleManagedLibrary = null;
-        }
+    @SuppressWarnings("UnstableApiUsage")
+    private void publishLibraryChange(
+            @Nullable PapyrusImportSyntheticLibrary previousLibrary,
+            @Nullable PapyrusImportSyntheticLibrary nextLibrary
+    ) {
+        List<VirtualFile> oldRoots = sourceRoots(previousLibrary);
+        List<VirtualFile> newRoots = sourceRoots(nextLibrary);
 
-        List<String> desiredRoots = imports.roots();
-        currentImportRoots = List.copyOf(desiredRoots);
-        currentImportLabels = Map.copyOf(imports.labelsByPathKey());
-
-        ManagedLibrary managed = readManagedLibrary();
-        Module desiredModule = desiredRoots.isEmpty()
-                ? null
-                : ReadAction.computeBlocking(() -> findPreferredModule(infos));
-
-        if (managed != null && (desiredModule == null || !managed.moduleName().equals(desiredModule.getName()))) {
-            removeManagedLibrary(managed);
-            managed = null;
-        }
-
-        if (desiredRoots.isEmpty()) {
-            if (managed != null) {
-                removeManagedLibrary(managed);
+        ApplicationManager.getApplication().invokeLater(() -> {
+            if (project.isDisposed()) {
+                return;
             }
-            clearManagedState();
-            return;
-        }
-
-        if (desiredModule == null || desiredModule.isDisposed()) {
-            LOG.warn("Cannot attach Papyrus import library because no owning module was found");
-            return;
-        }
-
-        if (managed == null) {
-            String libraryName = chooseLibraryName(desiredModule);
-            managed = new ManagedLibrary(desiredModule.getName(), libraryName);
-        }
-
-        if (!syncManagedLibrary(desiredModule, managed.libraryName(), desiredRoots)) {
-            return;
-        }
-        writeManagedState(managed);
-    }
-
-    private @NotNull String chooseLibraryName(@NotNull Module module) {
-        return ReadAction.computeBlocking(() -> {
-            for (OrderEntry entry : ModuleRootManager.getInstance(module).getOrderEntries()) {
-                if (entry instanceof LibraryOrderEntry libraryEntry) {
-                    Library library = libraryEntry.getLibrary();
-                    if (library != null && DEFAULT_LIBRARY_NAME.equals(library.getName())) {
-                        return FALLBACK_LIBRARY_NAME;
-                    }
-                }
-            }
-            return DEFAULT_LIBRARY_NAME;
+            WriteAction.run(() -> AdditionalLibraryRootsListener.fireAdditionalLibraryChanged(
+                    project,
+                    PapyrusImportSyntheticLibrary.PRESENTABLE_NAME,
+                    oldRoots,
+                    newRoots,
+                    LIBRARY_DEBUG_NAME
+            ));
         });
     }
 
-    private boolean syncManagedLibrary(
-            @NotNull Module module,
-            @NotNull String libraryName,
-            @NotNull List<String> desiredRoots
-    ) {
-        if (module.isDisposed()) {
-            return false;
-        }
-
-        try {
-            ModuleRootModificationUtil.updateModel(module, model -> {
-                LibraryTable table = model.getModuleLibraryTable();
-                Library library = table.getLibraryByName(libraryName);
-                if (library == null) {
-                    library = table.createLibrary(libraryName);
-                }
-
-                Library.ModifiableModel libraryModel = library.getModifiableModel();
-                if (libraryModel instanceof LibraryEx.ModifiableModelEx extendedModel) {
-                    if (extendedModel.getKind() != PapyrusImportLibraryType.KIND) {
-                        extendedModel.setKind(PapyrusImportLibraryType.KIND);
-                        extendedModel.setProperties(PapyrusImportLibraryType.KIND.createDefaultProperties());
-                    }
-                } else {
-                    throw new IllegalStateException(
-                            "Papyrus import library does not expose the IntelliJ extended library model"
-                    );
-                }
-
-                for (String url : libraryModel.getUrls(OrderRootType.SOURCES)) {
-                    libraryModel.removeRoot(url, OrderRootType.SOURCES);
-                }
-                for (String url : libraryModel.getUrls(OrderRootType.CLASSES)) {
-                    libraryModel.removeRoot(url, OrderRootType.CLASSES);
-                }
-                for (String root : desiredRoots) {
-                    libraryModel.addRoot(VfsUtilCore.pathToUrl(root), OrderRootType.SOURCES);
-                }
-                ApplicationManager.getApplication().invokeAndWait(
-                        () -> WriteAction.run(libraryModel::commit)
-                );
-            });
-            return true;
-        } catch (RuntimeException exception) {
-            LOG.warn("Failed to synchronize Papyrus import library", exception);
-            return false;
-        }
+    private static @NotNull List<VirtualFile> sourceRoots(@Nullable PapyrusImportSyntheticLibrary library) {
+        return library == null ? List.of() : List.copyOf(library.getSourceRoots());
     }
 
-    private void removeManagedLibrary(@NotNull ManagedLibrary managed) {
+    private static boolean librariesEqual(
+            @Nullable PapyrusImportSyntheticLibrary first,
+            @Nullable PapyrusImportSyntheticLibrary second
+    ) {
+        return first == null ? second == null : first.equals(second);
+    }
+
+    private static @Nullable PapyrusImportSyntheticLibrary createLibrary(@NotNull ImportCollection imports) {
+        if (imports.roots().isEmpty()) {
+            return null;
+        }
+
+        List<VirtualFile> roots = new ArrayList<>();
+        Map<String, String> labelsByRootUrl = new LinkedHashMap<>();
+        for (String rootPath : imports.roots()) {
+            VirtualFile root = findOrRefreshDirectory(rootPath);
+            if (root == null) {
+                continue;
+            }
+            roots.add(root);
+            String label = imports.labelsByPathKey().get(pathKey(rootPath));
+            if (label != null && !label.isBlank()) {
+                labelsByRootUrl.put(root.getUrl(), label);
+            }
+        }
+
+        return roots.isEmpty() ? null : new PapyrusImportSyntheticLibrary(roots, labelsByRootUrl);
+    }
+
+    private void removeLegacyManagedLibrary(@NotNull ManagedLibrary managed) {
         Module module = ReadAction.computeBlocking(() -> findModuleByName(managed.moduleName()));
         if (module == null || module.isDisposed()) {
-            clearManagedState();
+            state = currentDefaults();
             return;
         }
 
@@ -297,47 +242,10 @@ public final class PapyrusImportLibraryService
                 }
             });
         } catch (RuntimeException exception) {
-            LOG.warn("Failed to remove Papyrus import library", exception);
+            LOG.warn("Failed to remove legacy Papyrus import module library", exception);
             return;
         }
-        clearManagedState();
-    }
-
-    private @Nullable Module findPreferredModule(@NotNull ProjectInfos infos) {
-        ProjectFileIndex fileIndex = ProjectFileIndex.getInstance(project);
-        String basePath = project.getBasePath();
-        if (basePath != null && !basePath.isBlank()) {
-            VirtualFile baseDirectory = findDirectory(basePath);
-            if (baseDirectory != null) {
-                Module module = fileIndex.getModuleForFile(baseDirectory);
-                if (module != null && !module.isDisposed()) {
-                    return module;
-                }
-            }
-        }
-
-        for (ProjectInfo projectInfo : infos.getProjects()) {
-            for (ProjectInfoSourceInclude include : projectInfo.getSourceIncludes()) {
-                if (include.isImport() || include.isRemote()) {
-                    continue;
-                }
-                String fullPath = normalizeExistingDirectory(include.getFullPath());
-                if (fullPath == null) {
-                    continue;
-                }
-                VirtualFile sourceDirectory = findDirectory(fullPath);
-                if (sourceDirectory == null) {
-                    continue;
-                }
-                Module module = fileIndex.getModuleForFile(sourceDirectory);
-                if (module != null && !module.isDisposed()) {
-                    return module;
-                }
-            }
-        }
-
-        Module[] modules = ModuleManager.getInstance(project).getModules();
-        return modules.length == 1 && !modules[0].isDisposed() ? modules[0] : null;
+        state = currentDefaults();
     }
 
     private @Nullable Module findModuleByName(@NotNull String name) {
@@ -352,35 +260,10 @@ public final class PapyrusImportLibraryService
     private record ManagedLibrary(@NotNull String moduleName, @NotNull String libraryName) {
     }
 
-    private @Nullable ManagedLibrary readManagedLibrary() {
-        SettingsState snapshot = state;
-        if (snapshot.managedModuleName == null || snapshot.managedModuleName.isBlank()
-                || snapshot.managedLibraryName == null || snapshot.managedLibraryName.isBlank()) {
-            return null;
-        }
-        return new ManagedLibrary(snapshot.managedModuleName, snapshot.managedLibraryName);
-    }
-
-    private void writeManagedState(@NotNull ManagedLibrary managed) {
-        SettingsState newState = currentDefaults();
-        newState.managedModuleName = managed.moduleName();
-        newState.managedLibraryName = managed.libraryName();
-        state = newState;
-    }
-
-    private void clearManagedState() {
-        state = currentDefaults();
-    }
-
     private static @NotNull SettingsState currentDefaults() {
         SettingsState defaults = new SettingsState();
         defaults.pluginVersion = PapyrusPluginVersion.CURRENT;
         return defaults;
-    }
-
-    private static @Nullable VirtualFile findDirectory(@NotNull String path) {
-        VirtualFile file = LocalFileSystem.getInstance().findFileByPath(path);
-        return file != null && file.isDirectory() ? file : null;
     }
 
     static @NotNull List<String> collectLocalImportRoots(@NotNull ProjectInfos infos) {
@@ -392,19 +275,6 @@ public final class PapyrusImportLibraryService
     }
 
     private static @NotNull ImportCollection collectLocalImports(@NotNull ProjectInfos infos) {
-        Map<String, String> localSources = new LinkedHashMap<>();
-        for (ProjectInfo projectInfo : infos.getProjects()) {
-            for (ProjectInfoSourceInclude include : projectInfo.getSourceIncludes()) {
-                if (include.isImport() || include.isRemote()) {
-                    continue;
-                }
-                String normalized = normalizeExistingDirectory(include.getFullPath());
-                if (normalized != null) {
-                    localSources.putIfAbsent(pathKey(normalized), normalized);
-                }
-            }
-        }
-
         Map<String, ImportRoot> unique = new LinkedHashMap<>();
         for (ProjectInfo projectInfo : infos.getProjects()) {
             for (ProjectInfoSourceInclude include : projectInfo.getSourceIncludes()) {
@@ -412,7 +282,7 @@ public final class PapyrusImportLibraryService
                     continue;
                 }
                 String normalized = normalizeExistingDirectory(include.getFullPath());
-                if (normalized == null || isCoveredByLocalSource(normalized, localSources.values())) {
+                if (normalized == null) {
                     continue;
                 }
 
@@ -451,18 +321,6 @@ public final class PapyrusImportLibraryService
         return new ImportCollection(List.copyOf(roots), Map.copyOf(labels));
     }
 
-    private static boolean isCoveredByLocalSource(
-            @NotNull String importPath,
-            @NotNull Iterable<String> localSources
-    ) {
-        for (String source : localSources) {
-            if (isAncestorOrSame(source, importPath)) {
-                return true;
-            }
-        }
-        return false;
-    }
-
     private record ImportRoot(@NotNull String path, @NotNull String label) {
     }
 
@@ -491,6 +349,15 @@ public final class PapyrusImportLibraryService
             LOG.debug("Ignoring invalid Papyrus import path: " + value, exception);
             return null;
         }
+    }
+
+    private static @Nullable VirtualFile findOrRefreshDirectory(@NotNull String path) {
+        LocalFileSystem fileSystem = LocalFileSystem.getInstance();
+        VirtualFile file = fileSystem.findFileByPath(path);
+        if (file == null) {
+            file = fileSystem.refreshAndFindFileByPath(path);
+        }
+        return file != null && file.isDirectory() ? file : null;
     }
 
     private static boolean isAncestorOrSame(@NotNull String ancestor, @NotNull String candidate) {

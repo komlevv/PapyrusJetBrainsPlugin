@@ -4,7 +4,7 @@ This document contains only **remaining decisions/work**. Completed per-version 
 
 ## Current baseline
 
-- Current source: **0.2.170**. 0.2.151's editor-local Ctrl+B route is user-confirmed working; 0.2.154-0.2.156 established the source-only import-library model; 0.2.158 adds guarded PPJ validation/reload state, last-known-good project snapshots, and explicit user-visible reload errors.
+- Current source: **0.2.174**. 0.2.151's editor-local Ctrl+B route is user-confirmed working; 0.2.154-0.2.156 established the source-only import-library model; 0.2.158 adds guarded PPJ validation/reload state, last-known-good project snapshots, and explicit user-visible reload errors.
 - 0.2.126: plugin-owned cleanup for all 24 submitted CLion inspection screenshots; no intended Papyrus feature change.
 - Current authoritative gate: user-verified **81 unit / 20 exact-upstream server / 48 real-CLion = 149/149** on **0.2.169**.
 - Hardened semantic Papyrus Rename is VERIFIED at the 0.2.112 baseline.
@@ -288,4 +288,6 @@ For every future iteration:
 
 - 0.2.169 startup activation: after an IDE project opens, a lightweight project-local `.ppj`/`.psc` probe activates Papyrus Projects, the guarded watcher/document bridge, and the Papyrus LSP without requiring an editor tab. `.idea`, build/output, dependency, and plugin-generated snapshot trees do not count as Papyrus project signals.
 
+- 0.2.172 Project View import presentation: keep project-local paths that are explicitly listed in PPJ `<Imports>` visible under `Papyrus Imports`, while restricting labels like `src: src` to the External Libraries node so the ordinary project folder remains `src`.
+- 0.2.173 import-library API cleanup: provide PPJ imports through `AdditionalLibraryRootsProvider`/`SyntheticLibrary`, scope Project View labels to the plugin-owned synthetic parent, remove `PapyrusImportLibraryType`, `LibraryEx`, and `NamedLibraryElement` dependencies, and migrate away the legacy managed module library.
 - 0.2.170 TextMate compatibility: keep the illegal-leading-comma scope for `Function Foo(, Int x)` while preventing JetBrains TextMate from applying it to valid separators such as `Function Foo(Int x, FormList y)`.

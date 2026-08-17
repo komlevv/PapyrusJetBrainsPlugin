@@ -1,9 +1,25 @@
-# Papyrus JetBrains Plugin port status — 0.2.170 source
+# Papyrus JetBrains Plugin port status — 0.2.174 source
 
 Current status: **ALPHA**. Active compatibility target: **CLion 2026.2.x / IntelliJ Platform 262**; verified target: **CLion 2026.2.1 / CL-262.9437.136**.
 
-The current source is **0.2.170**. The latest user-confirmed green Windows baseline is **0.2.169**. 0.2.170 applies a JetBrains-specific compatibility patch to the pinned Papyrus TextMate grammar so valid function-parameter separator commas are not marked illegal while a leading comma remains an error. 0.2.169 moves Papyrus project activation to IDE project startup, gated by a filesystem probe for project-local `.ppj` or `.psc` files, so unrelated projects do not start Papyrus services. The expanded 0.2.148 investigation gate is **59 UNIT + 20 PAPYRUS-LANG + 45 REAL CLION UI**; its three physical Ctrl+B scenarios intentionally reproduced the CLion/Rider shortcut-dispatch defect. The user's 0.2.150 gate kept 59/59 UNIT and 20/20 PAPYRUS-LANG green but failed exactly the three physical Ctrl+B scenarios because the editor-local `AnActionWrapper` was performed without navigation. 0.2.151 replaced that wrapper execution strategy and the user has since confirmed the resulting Ctrl+B path works in real CLion. The diagnostic 0.2.152 removal of the interceptor failed; 0.2.153 retains 0.2.151 and targets imported-source LSP continuity.
+The current source is **0.2.174**. The latest user-confirmed green Windows baseline is **0.2.170**. 0.2.170 applies a JetBrains-specific compatibility patch to the pinned Papyrus TextMate grammar so valid function-parameter separator commas are not marked illegal while a leading comma remains an error. 0.2.169 moves Papyrus project activation to IDE project startup, gated by a filesystem probe for project-local `.ppj` or `.psc` files, so unrelated projects do not start Papyrus services. The expanded 0.2.148 investigation gate is **59 UNIT + 20 PAPYRUS-LANG + 45 REAL CLION UI**; its three physical Ctrl+B scenarios intentionally reproduced the CLion/Rider shortcut-dispatch defect. The user's 0.2.150 gate kept 59/59 UNIT and 20/20 PAPYRUS-LANG green but failed exactly the three physical Ctrl+B scenarios because the editor-local `AnActionWrapper` was performed without navigation. 0.2.151 replaced that wrapper execution strategy and the user has since confirmed the resulting Ctrl+B path works in real CLion. The diagnostic 0.2.152 removal of the interceptor failed; 0.2.153 retains 0.2.151 and targets imported-source LSP continuity.
 
+
+
+## 0.2.174 Synthetic-library UI gate correction
+
+0.2.174 leaves the 0.2.173 production synthetic-library implementation unchanged. The sole regression was in the real-CLion test bridge: `papyrusImportLibraryExternalRootTypes()` still searched module `LibraryOrderEntry`/`LibraryType`, a model intentionally removed in 0.2.173, so the combined wait condition was permanently false even when `ProjectFileIndex.isInLibrarySource(...)` was already correct. The obsolete probe and its `LibraryEx` dependency are removed; the UI gate now verifies the actual synthetic-library contract directly.
+
+## 0.2.173 Synthetic Papyrus import library
+
+0.2.173 moves current PPJ imports from a plugin-created module library to the public `AdditionalLibraryRootsProvider`/`SyntheticLibrary` model. The synthetic library is named `Papyrus Imports`, contributes only source roots, and may contain a directory that is also project content. Project View decoration is scoped by the plugin-owned synthetic-library parent instead of JetBrains `NamedLibraryElement`, so `Project -> src` remains `src` while `External Libraries -> Papyrus Imports -> src: src` keeps the Papyrus label and library-folder presentation. `PapyrusImportLibraryType` and the `LibraryEx` mutation path are removed. The only non-stable Platform surface in this path is the official `AdditionalLibraryRootsListener` dynamic-refresh hook, which Platform 262 itself marks experimental and documents as the notification mechanism for changed synthetic roots.
+
+## 0.2.172 Project-view import-root presentation
+
+- Rebuilt from the 0.2.170 baseline; the discarded 0.2.171 project-content import suppression is not carried forward.
+- A directory listed in PPJ `<Imports>` remains eligible for the managed `Papyrus Imports` library even when the same directory is also project content.
+- Papyrus include labels such as `src: src` are applied only to the root node whose parent is the managed Papyrus library. The ordinary `Project -> src` node keeps its physical directory name.
+- The decorator changes only text presentation; IntelliJ keeps the normal External Libraries styling for the managed import root.
 
 ## 0.2.170 TextMate parameter comma compatibility
 
@@ -35,7 +51,7 @@ The Projects service keeps its previous successful snapshot during dirty, valida
 
 ## Baseline
 
-- Plugin source version: **0.2.170**.
+- Plugin source version: **0.2.174**.
 - 0.2.126 is the all-24 plugin-source inspection cleanup; expected runtime behavior is unchanged.
 - Authoritative Windows gate: user-verified **0.2.146 — 59/59 UNIT, 16/16 PAPYRUS-LANG, 39/39 REAL CLION UI = 114/114**.
 - Hardened LSP-semantic **Refactor | Rename** is VERIFIED at the 0.2.112 baseline.

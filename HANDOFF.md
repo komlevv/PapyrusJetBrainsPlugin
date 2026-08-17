@@ -1,4 +1,4 @@
-# Papyrus JetBrains Plugin handoff — 0.2.170 source
+# Papyrus JetBrains Plugin handoff — 0.2.174 source
 
 > Documentation boundary: `README.md` is the public/user-facing GitHub landing page. Version-by-version history, regression notes, test gates, inspection/lint details, local build paths, offline dependency layout, implementation notes, and other maintainer-only operational context belong here or in the dedicated living technical documents, not in `README.md`.
 
@@ -14,6 +14,32 @@ Target runtime/test IDE: **CLion 2026.2.x / IntelliJ Platform 262**. Verified in
 
 
 
+
+
+## 0.2.174 — synthetic-library UI regression test fix
+
+- Keeps the 0.2.173 `AdditionalLibraryRootsProvider`/`SyntheticLibrary` production implementation unchanged.
+- Fixes the real-CLion regression test that still inspected the removed module `Library`/`LibraryType` model and therefore could never observe the synthetic `Papyrus Imports` library.
+- The imported-source assertion now checks the actual public contract: imported vanilla PSC files are outside project content and `ProjectFileIndex.isInLibrarySource(...) == true`.
+- Removes the obsolete UI-test helper dependency on `LibraryEx` and the old module-library root-type probe.
+- Expected gate: **83 UNIT + 20 PAPYRUS-LANG + 48 REAL CLION UI**.
+
+## 0.2.173 — synthetic Papyrus Imports library
+
+- Replaces the plugin-owned module `Library`/custom `LibraryType` presentation path with IntelliJ `AdditionalLibraryRootsProvider` + `SyntheticLibrary`.
+- PPJ `<Imports>` are exposed as one synthetic source library named `Papyrus Imports`; project-local imports such as `./src` remain visible there even when the same directory is normal project content.
+- `PapyrusImportProjectViewDecorator` now recognizes the plugin's own `PapyrusImportSyntheticLibrary` parent, so it no longer depends on `com.intellij.ide.projectView.impl.nodes.NamedLibraryElement`.
+- `src: src` and the library-folder icon are applied only to the External Libraries copy; `Project -> src` remains unchanged.
+- The old `PapyrusImportLibraryType` extension and `LibraryEx` mutation path are removed. Persisted 0.2.172 module-library ownership is retained only long enough to delete that legacy managed library on upgrade.
+- Dynamic synthetic-root changes use JetBrains' official `AdditionalLibraryRootsListener.fireAdditionalLibraryChanged(...)` hook under a write action; Platform 262 marks that notification API experimental, but no JetBrains `impl.*` class is used by the new import-library path.
+- Expected gate: **83 UNIT + 20 PAPYRUS-LANG + 48 REAL CLION UI**.
+
+## 0.2.172 — context-safe Papyrus import labels
+
+- Built again from the 0.2.170 source baseline rather than layering on the discarded 0.2.171 import-overlap changes.
+- PPJ imports are not removed merely because the same physical directory is project content.
+- `PapyrusImportProjectViewDecorator` now checks the Project View parent: an import label is applied only below the managed `Papyrus Imports` library, never to the ordinary project-content copy of the same `PsiDirectory`.
+- Expected result for `<Import>./src</Import>` plus `<Folder>./src</Folder>`: `Project -> src` and `External Libraries -> Papyrus Imports -> src: src`.
 
 ## 0.2.170 — JetBrains TextMate parameter-comma compatibility
 
@@ -55,7 +81,7 @@ The Projects `Refresh` button now switches immediately to a native disabled `Ref
 
 ## Current source state
 
-- Current source version: **0.2.170**.
+- Current source version: **0.2.174**.
 - 0.2.126 is the all-24 inspection cleanup. It does not add a Papyrus feature; it refactors plugin-owned warnings, updates deprecated/DevKit APIs, adds descriptor/live-template i18n, and documents every submitted screenshot in `INSPECTION_AUDIT.md`. Vendor/generated artifacts remain untouched.
 - Latest user-confirmed green Windows gate: **0.2.169 — 81/81 UNIT, 20/20 PAPYRUS-LANG, 48/48 REAL CLION UI**.
 - Hardened semantic **Refactor | Rename** is VERIFIED at the 0.2.112 baseline.
