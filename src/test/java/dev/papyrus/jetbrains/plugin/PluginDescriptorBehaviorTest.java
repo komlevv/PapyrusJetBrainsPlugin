@@ -43,6 +43,8 @@ final class PluginDescriptorBehaviorTest {
             assertTrue(hasPapyrusAdditionalLibraryRootsProvider(document));
             assertFalse(hasPapyrusLegacyLibraryType(document));
             assertTrue(hasDependency(document, "com.intellij.modules.lsp"));
+            assertTrue(hasDependency(document, "com.intellij.modules.xml"));
+            assertTrue(hasPapyrusProjectXmlLanguageSubstitutor(document));
             assertTrue(hasDependency(document, "com.intellij.modules.ultimate"));
             assertFalse(hasLanguageProjectGenerator(document));
             assertFalse(hasAction(document, "Papyrus.AttachDebugger"));
@@ -55,6 +57,17 @@ final class PluginDescriptorBehaviorTest {
         }
     }
 
+
+    private static boolean hasPapyrusProjectXmlLanguageSubstitutor(Document document) {
+        String implementation = "dev.papyrus.jetbrains.editor.PapyrusProjectXmlLanguageSubstitutor";
+        var substitutors = document.getElementsByTagName("lang.substitutor");
+        for (int index = 0; index < substitutors.getLength(); index++) {
+            var element = (org.w3c.dom.Element) substitutors.item(index);
+            if (implementation.equals(element.getAttribute("implementationClass"))
+                    && "textmate".equals(element.getAttribute("language"))) return true;
+        }
+        return false;
+    }
 
     private static boolean hasPapyrusAdditionalLibraryRootsProvider(Document document) {
         String implementation = "dev.papyrus.jetbrains.projects.PapyrusImportAdditionalLibraryRootsProvider";

@@ -1,4 +1,4 @@
-# Papyrus JetBrains Plugin handoff — 0.2.174 source
+# Papyrus JetBrains Plugin handoff — 0.2.175 source
 
 > Documentation boundary: `README.md` is the public/user-facing GitHub landing page. Version-by-version history, regression notes, test gates, inspection/lint details, local build paths, offline dependency layout, implementation notes, and other maintainer-only operational context belong here or in the dedicated living technical documents, not in `README.md`.
 
@@ -15,6 +15,11 @@ Target runtime/test IDE: **CLion 2026.2.x / IntelliJ Platform 262**. Verified in
 
 
 
+
+
+## 0.2.175 — native XML editing for `.ppj`
+
+`.ppj` remains owned by the pinned upstream TextMate bundle at the file-type level, while `PapyrusProjectXmlLanguageSubstitutor` maps only TextMate `.ppj` PSI to the platform `XML` language. The plugin now declares `com.intellij.modules.xml`; no private XML parser or custom tag-closing handler is introduced. This should provide standard IntelliJ XML editing semantics while preserving Papyrus project discovery, validation, immutable snapshot handling, and the `.ppj` exclusion from native LSP text synchronization. The real-CLion gate adds one regression for TextMate file-type preservation + XML PSI + `<Import></Import>` auto-close. Expected gate: **83 UNIT + 20 PAPYRUS-LANG + 49 REAL CLION UI**.
 
 ## 0.2.174 — synthetic-library UI regression test fix
 
@@ -81,7 +86,7 @@ The Projects `Refresh` button now switches immediately to a native disabled `Ref
 
 ## Current source state
 
-- Current source version: **0.2.174**.
+- Current source version: **0.2.175**.
 - 0.2.126 is the all-24 inspection cleanup. It does not add a Papyrus feature; it refactors plugin-owned warnings, updates deprecated/DevKit APIs, adds descriptor/live-template i18n, and documents every submitted screenshot in `INSPECTION_AUDIT.md`. Vendor/generated artifacts remain untouched.
 - Latest user-confirmed green Windows gate: **0.2.169 — 81/81 UNIT, 20/20 PAPYRUS-LANG, 48/48 REAL CLION UI**.
 - Hardened semantic **Refactor | Rename** is VERIFIED at the 0.2.112 baseline.

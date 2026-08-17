@@ -15,6 +15,10 @@ This file describes the **current safety model**, not historical incidents.
 
 
 
+## 0.2.175 PPJ XML PSI substitution
+
+0.2.175 adds only editor-language substitution for `.ppj`: the public `LanguageSubstitutor` extension maps TextMate PPJ PSI to the platform `XML` language, with an explicit `com.intellij.modules.xml` dependency. It does not change project-file validation, compilation destinations, filesystem safety boundaries, LSP write behavior, or executable/debugger policy.
+
 ## 0.2.174 synthetic-library test cleanup
 
 0.2.174 changes no production filesystem, indexing, LSP, compiler, or project-model behavior. It removes an obsolete real-IDE test helper that depended on `LibraryEx` and the old module-library `LibraryType` path. The regression gate now checks synthetic-library membership through public `ProjectFileIndex.isInLibrarySource(...)`, matching the 0.2.173 production architecture.

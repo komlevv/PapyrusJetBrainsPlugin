@@ -4,7 +4,7 @@ This document contains only **remaining decisions/work**. Completed per-version 
 
 ## Current baseline
 
-- Current source: **0.2.174**. 0.2.151's editor-local Ctrl+B route is user-confirmed working; 0.2.154-0.2.156 established the source-only import-library model; 0.2.158 adds guarded PPJ validation/reload state, last-known-good project snapshots, and explicit user-visible reload errors.
+- Current source: **0.2.175**. 0.2.151's editor-local Ctrl+B route is user-confirmed working; 0.2.154-0.2.156 established the source-only import-library model; 0.2.158 adds guarded PPJ validation/reload state, last-known-good project snapshots, and explicit user-visible reload errors.
 - 0.2.126: plugin-owned cleanup for all 24 submitted CLion inspection screenshots; no intended Papyrus feature change.
 - Current authoritative gate: user-verified **81 unit / 20 exact-upstream server / 48 real-CLion = 149/149** on **0.2.169**.
 - Hardened semantic Papyrus Rename is VERIFIED at the 0.2.112 baseline.

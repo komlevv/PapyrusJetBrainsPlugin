@@ -2153,6 +2153,55 @@ internal class PapyrusEditorFeaturesUiTest {
         }
     }
 
+    @Test
+    @Order(49)
+    fun ppjUsesNativeXmlPsiAndAutoClosesTags() {
+        val support = ide.utility<PapyrusUiTestSupportRemote>()
+        val relativePath = "xml-editing.ppj"
+        val initial = """
+            <PapyrusProject>
+                <Imports>
+                    PLACEHOLDER
+                </Imports>
+            </PapyrusProject>
+        """.trimIndent()
+        val created = Path.of(support.createProjectTextFile(ide.project, relativePath, initial))
+        refreshVfs(created)
+
+        try {
+            val (fileTypeName, languageId) = ide.projectEdt { project ->
+                val file = virtualFileInContext(created)
+                val fileType = service<FileTypeManagerRemote>().getFileTypeByFile(file)
+                val psi = service<PsiManagerRemote>(project).findFile(file)
+                assertNotNull(fileType)
+                assertNotNull(psi)
+                fileType!!.getName() to psi!!.getLanguage().getID()
+            }
+            assertTrue(
+                fileTypeName.equals("textmate", ignoreCase = true),
+                "PPJ file type changed unexpectedly: $fileTypeName",
+            )
+            assertTrue(
+                languageId.equals("XML", ignoreCase = true),
+                "PPJ PSI language is not XML: $languageId",
+            )
+
+            val editor = open(created)
+            val placeholder = editor.getDocument().getText().indexOf("PLACEHOLDER")
+            assertTrue(placeholder >= 0, "PPJ XML editing fixture has no insertion point")
+            replaceDocumentRange(editor, placeholder, placeholder + "PLACEHOLDER".length, "")
+            focusEditor(editor, placeholder)
+            typeText(editor, "<Import>")
+
+            ide.waitFor("native XML PPJ closing tag", SHORT) {
+                editor.getDocument().getText().contains("<Import></Import>")
+            }
+        } finally {
+            closeSelectedFileIfNamed(relativePath)
+            support.deleteProjectFile(ide.project, relativePath)
+        }
+    }
+
     private fun closeModalDialogWithButton(title: String, buttonText: String) {
         with(ide.driver) {
             ideFrame {

@@ -1,10 +1,15 @@
-# Papyrus JetBrains Plugin port status — 0.2.174 source
+# Papyrus JetBrains Plugin port status — 0.2.175 source
 
 Current status: **ALPHA**. Active compatibility target: **CLion 2026.2.x / IntelliJ Platform 262**; verified target: **CLion 2026.2.1 / CL-262.9437.136**.
 
-The current source is **0.2.174**. The latest user-confirmed green Windows baseline is **0.2.170**. 0.2.170 applies a JetBrains-specific compatibility patch to the pinned Papyrus TextMate grammar so valid function-parameter separator commas are not marked illegal while a leading comma remains an error. 0.2.169 moves Papyrus project activation to IDE project startup, gated by a filesystem probe for project-local `.ppj` or `.psc` files, so unrelated projects do not start Papyrus services. The expanded 0.2.148 investigation gate is **59 UNIT + 20 PAPYRUS-LANG + 45 REAL CLION UI**; its three physical Ctrl+B scenarios intentionally reproduced the CLion/Rider shortcut-dispatch defect. The user's 0.2.150 gate kept 59/59 UNIT and 20/20 PAPYRUS-LANG green but failed exactly the three physical Ctrl+B scenarios because the editor-local `AnActionWrapper` was performed without navigation. 0.2.151 replaced that wrapper execution strategy and the user has since confirmed the resulting Ctrl+B path works in real CLion. The diagnostic 0.2.152 removal of the interceptor failed; 0.2.153 retains 0.2.151 and targets imported-source LSP continuity.
+The current source is **0.2.175**. The latest user-confirmed green Windows baseline is **0.2.170**. 0.2.170 applies a JetBrains-specific compatibility patch to the pinned Papyrus TextMate grammar so valid function-parameter separator commas are not marked illegal while a leading comma remains an error. 0.2.169 moves Papyrus project activation to IDE project startup, gated by a filesystem probe for project-local `.ppj` or `.psc` files, so unrelated projects do not start Papyrus services. The expanded 0.2.148 investigation gate is **59 UNIT + 20 PAPYRUS-LANG + 45 REAL CLION UI**; its three physical Ctrl+B scenarios intentionally reproduced the CLion/Rider shortcut-dispatch defect. The user's 0.2.150 gate kept 59/59 UNIT and 20/20 PAPYRUS-LANG green but failed exactly the three physical Ctrl+B scenarios because the editor-local `AnActionWrapper` was performed without navigation. 0.2.151 replaced that wrapper execution strategy and the user has since confirmed the resulting Ctrl+B path works in real CLion. The diagnostic 0.2.152 removal of the interceptor failed; 0.2.153 retains 0.2.151 and targets imported-source LSP continuity.
 
 
+
+
+## 0.2.175 Native XML PSI for PPJ editing
+
+Papyrus project (`.ppj`) files keep their existing TextMate file type and Papyrus project/LSP semantics, but a public `LanguageSubstitutor` now substitutes the IntelliJ Platform `XML` language for PSI parsing. The plugin explicitly depends on `com.intellij.modules.xml`. This enables the platform XML parser and editor handlers instead of reimplementing XML behavior in Papyrus code, including structural tag matching and automatic closing tags such as `<Import></Import>`. The substitutor is scoped to the existing `textmate` language and returns XML only for `.ppj`. A real-CLion regression verifies that the file type remains TextMate, the PSI language is XML, and typing `<Import>` inserts the matching closing tag. Expected gate: **83 UNIT + 20 PAPYRUS-LANG + 49 REAL CLION UI**.
 
 ## 0.2.174 Synthetic-library UI gate correction
 
@@ -51,7 +56,7 @@ The Projects service keeps its previous successful snapshot during dirty, valida
 
 ## Baseline
 
-- Plugin source version: **0.2.174**.
+- Plugin source version: **0.2.175**.
 - 0.2.126 is the all-24 plugin-source inspection cleanup; expected runtime behavior is unchanged.
 - Authoritative Windows gate: user-verified **0.2.146 — 59/59 UNIT, 16/16 PAPYRUS-LANG, 39/39 REAL CLION UI = 114/114**.
 - Hardened LSP-semantic **Refactor | Rename** is VERIFIED at the 0.2.112 baseline.

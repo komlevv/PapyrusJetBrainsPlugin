@@ -19,6 +19,7 @@ This is a CLion port of `joelday/papyrus-lang`. Plugin uses `v3.3.0-prerelease.1
 ### Editing and navigation
 
 - `.psc` syntax highlighting;
+- native IntelliJ XML PSI/editing for `.ppj`, including matching/automatic closing tags;
 - completion, including member completion after `.`;
 - diagnostics;
 - Go to Declaration / Definition;
